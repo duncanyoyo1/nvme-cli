@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <time.h>
 
 #include "nvme-print.h"
 #include "json.h"
@@ -132,12 +133,12 @@ static void show_nvme_id_ctrl_ctratt(__le32 ctrl_ctratt)
 {
 	__u32 ctratt = le32_to_cpu(ctrl_ctratt);
 	__u32 rsvd0 = ctratt >> 6;
-	__u32 hostid128 = ctratt & NVME_CTRL_CTRATT_128_ID >> 0;
-	__u32 psp = ctratt & NVME_CTRL_CTRATT_NON_OP_PSP >> 1;
-	__u32 sets = ctratt & NVME_CTRL_CTRATT_NVM_SETS >> 2;
-	__u32 rrl = ctratt & NVME_CTRL_CTRATT_READ_RECV_LVLS >> 3;
-	__u32 eg = ctratt & NVME_CTRL_CTRATT_ENDURANCE_GROUPS >> 4;
-	__u32 iod = ctratt & NVME_CTRL_CTRATT_PREDICTABLE_LAT >> 5;
+	__u32 hostid128 = (ctratt & NVME_CTRL_CTRATT_128_ID) >> 0;
+	__u32 psp = (ctratt & NVME_CTRL_CTRATT_NON_OP_PSP) >> 1;
+	__u32 sets = (ctratt & NVME_CTRL_CTRATT_NVM_SETS) >> 2;
+	__u32 rrl = (ctratt & NVME_CTRL_CTRATT_READ_RECV_LVLS) >> 3;
+	__u32 eg = (ctratt & NVME_CTRL_CTRATT_ENDURANCE_GROUPS) >> 4;
+	__u32 iod = (ctratt & NVME_CTRL_CTRATT_PREDICTABLE_LAT) >> 5;
 
 	if (rsvd0)
 		printf(" [31:6] : %#x\tReserved\n", rsvd0);
@@ -352,7 +353,8 @@ static void show_nvme_id_ctrl_cqes(__u8 cqes)
 static void show_nvme_id_ctrl_oncs(__le16 ctrl_oncs)
 {
 	__u16 oncs = le16_to_cpu(ctrl_oncs);
-	__u16 rsvd = (oncs & 0xFF80) >> 7;
+	__u16 rsvd = (oncs & 0xFF00) >> 8;
+	__u16 virt = (oncs & 0x80) >> 7;
 	__u16 tmst = (oncs & 0x40) >> 6;
 	__u16 resv = (oncs & 0x20) >> 5;
 	__u16 save = (oncs & 0x10) >> 4;
@@ -362,7 +364,9 @@ static void show_nvme_id_ctrl_oncs(__le16 ctrl_oncs)
 	__u16 cmp = oncs & 0x1;
 
 	if (rsvd)
-		printf(" [15:6] : %#x\tReserved\n", rsvd);
+		printf(" [15:8] : %#x\tReserved\n", rsvd);
+	printf("  [7:7] : %#x\tVirtualization Management %sSupported\n",
+		virt, virt ? "" : "Not ");
 	printf("  [6:6] : %#x\tTimestamp %sSupported\n",
 		tmst, tmst ? "" : "Not ");
 	printf("  [5:5] : %#x\tReservations %sSupported\n",
@@ -966,10 +970,10 @@ void __show_nvme_id_ctrl(struct nvme_id_ctrl *ctrl, unsigned int mode, void (*ve
 	if (human)
 		show_nvme_id_ctrl_cmic(ctrl->cmic);
 	printf("mdts      : %d\n", ctrl->mdts);
-	printf("cntlid    : %x\n", le16_to_cpu(ctrl->cntlid));
-	printf("ver       : %x\n", le32_to_cpu(ctrl->ver));
-	printf("rtd3r     : %x\n", le32_to_cpu(ctrl->rtd3r));
-	printf("rtd3e     : %x\n", le32_to_cpu(ctrl->rtd3e));
+	printf("cntlid    : %#x\n", le16_to_cpu(ctrl->cntlid));
+	printf("ver       : %#x\n", le32_to_cpu(ctrl->ver));
+	printf("rtd3r     : %#x\n", le32_to_cpu(ctrl->rtd3r));
+	printf("rtd3e     : %#x\n", le32_to_cpu(ctrl->rtd3e));
 	printf("oaes      : %#x\n", le32_to_cpu(ctrl->oaes));
 	if (human)
 		show_nvme_id_ctrl_oaes(ctrl->oaes);
@@ -1056,7 +1060,7 @@ void __show_nvme_id_ctrl(struct nvme_id_ctrl *ctrl, unsigned int mode, void (*ve
 	if (human)
 		show_nvme_id_ctrl_nwpc(ctrl->nwpc);
 	printf("acwu      : %d\n", le16_to_cpu(ctrl->acwu));
-	printf("sgls      : %x\n", le32_to_cpu(ctrl->sgls));
+	printf("sgls      : %#x\n", le32_to_cpu(ctrl->sgls));
 	if (human)
 		show_nvme_id_ctrl_sgls(ctrl->sgls);
 	printf("mnan      : %d\n", le32_to_cpu(ctrl->mnan));
@@ -1064,7 +1068,7 @@ void __show_nvme_id_ctrl(struct nvme_id_ctrl *ctrl, unsigned int mode, void (*ve
 	printf("ioccsz    : %d\n", le32_to_cpu(ctrl->ioccsz));
 	printf("iorcsz    : %d\n", le32_to_cpu(ctrl->iorcsz));
 	printf("icdoff    : %d\n", le16_to_cpu(ctrl->icdoff));
-	printf("ctrattr   : %x\n", ctrl->ctrattr);
+	printf("ctrattr   : %#x\n", ctrl->ctrattr);
 	if (human)
 		show_nvme_id_ctrl_ctrattr(ctrl->ctrattr);
 	printf("msdbd     : %d\n", ctrl->msdbd);
@@ -1842,7 +1846,14 @@ static void show_auto_pst(struct nvme_auto_pst *apst)
 
 static void show_timestamp(struct nvme_timestamp *ts)
 {
-	printf("\tThe timestamp is : %"PRIu64"\n", int48_to_long(ts->timestamp));
+	struct tm *tm;
+	char buffer[32];
+	time_t timestamp = int48_to_long(ts->timestamp) / 1000;
+
+	tm = localtime(&timestamp);
+	strftime(buffer, sizeof(buffer), "%c %Z", tm);
+
+	printf("\tThe timestamp is : %"PRIu64" (%s)\n", int48_to_long(ts->timestamp), buffer);
 	printf("\t%s\n", (ts->attr & 2) ? "The Timestamp field was initialized with a "\
 			"Timestamp value using a Set Features command." : "The Timestamp field was initialized "\
 			"to ‘0’ by a Controller Level Reset.");
@@ -3062,6 +3073,48 @@ static inline __u64 mmio_read64(void *addr)
 	__le32 *p = addr;
 
 	return le32_to_cpu(*p) | ((uint64_t)le32_to_cpu(*(p + 1)) << 32);
+}
+
+void json_ctrl_registers(void *bar)
+{
+	uint64_t cap, asq, acq, bpmbl;
+	uint32_t vs, intms, intmc, cc, csts, nssr, aqa, cmbsz, cmbloc,
+			bpinfo, bprsel;
+	struct json_object *root;
+
+	cap = mmio_read64(bar + NVME_REG_CAP);
+	vs = mmio_read32(bar + NVME_REG_VS);
+	intms = mmio_read32(bar + NVME_REG_INTMS);
+	intmc = mmio_read32(bar + NVME_REG_INTMC);
+	cc = mmio_read32(bar + NVME_REG_CC);
+	csts = mmio_read32(bar + NVME_REG_CSTS);
+	nssr = mmio_read32(bar + NVME_REG_NSSR);
+	aqa = mmio_read32(bar + NVME_REG_AQA);
+	asq = mmio_read64(bar + NVME_REG_ASQ);
+	acq = mmio_read64(bar + NVME_REG_ACQ);
+	cmbloc = mmio_read32(bar + NVME_REG_CMBLOC);
+	cmbsz = mmio_read32(bar + NVME_REG_CMBSZ);
+	bpinfo = mmio_read32(bar + NVME_REG_BPINFO);
+	bprsel = mmio_read32(bar + NVME_REG_BPRSEL);
+	bpmbl = mmio_read64(bar + NVME_REG_BPMBL);
+
+	root = json_create_object();
+	json_object_add_value_uint(root, "cap", cap);
+	json_object_add_value_int(root, "vs", vs);
+	json_object_add_value_int(root, "intms", intms);
+	json_object_add_value_int(root, "intmc", intmc);
+	json_object_add_value_int(root, "cc", cc);
+	json_object_add_value_int(root, "csts", csts);
+	json_object_add_value_int(root, "nssr", nssr);
+	json_object_add_value_int(root, "aqa", aqa);
+	json_object_add_value_uint(root, "asq", asq);
+	json_object_add_value_uint(root, "acq", acq);
+	json_object_add_value_int(root, "cmbloc", cmbloc);
+	json_object_add_value_int(root, "cmbsz", cmbsz);
+	json_object_add_value_int(root, "bpinfo", bpinfo);
+	json_object_add_value_int(root, "bprsel", bprsel);
+	json_object_add_value_uint(root, "bpmbl", bpmbl);
+	json_print_object(root, NULL);
 }
 
 void show_ctrl_registers(void *bar, unsigned int mode, bool fabrics)

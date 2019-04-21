@@ -1,5 +1,5 @@
 '\" t
-.\"     Title: nvme-wdc-clear-pcie-correctable-errors
+.\"     Title: nvme-wdc-get-drive-status
 .\"    Author: [FIXME: author] [see http://www.docbook.org/tdg5/en/html/author]
 .\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
 .\"      Date: 04/08/2019
@@ -7,7 +7,7 @@
 .\"    Source: NVMe
 .\"  Language: English
 .\"
-.TH "NVME\-WDC\-CLEAR\-PC" "1" "04/08/2019" "NVMe" "NVMe Manual"
+.TH "NVME\-WDC\-GET\-DRIV" "1" "04/08/2019" "NVMe" "NVMe Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -28,22 +28,73 @@
 .\" * MAIN CONTENT STARTS HERE *
 .\" -----------------------------------------------------------------
 .SH "NAME"
-nvme-wdc-clear-pcie-correctable-errors \- Clears the pcie correctable errors field returned in the smart\-log\-add command\&.
+nvme-wdc-get-drive-status \- Send the NVMe WDC get\-drive\-status command, return result
 .SH "SYNOPSIS"
 .sp
 .nf
-\fInvme wdc clear\-pcie\-correctable\-errors\fR <device>
+\fInvme wdc get\-drive\-status\fR <device>
 .fi
 .SH "DESCRIPTION"
 .sp
-For the NVMe device given, sends the wdc vendor unique clear pcie correctable errors command\&.
+For the NVMe device given, send the unique WDC get\-drive\-status command and provide the additional drive status information\&.
 .sp
-The <device> parameter is mandatory and may be either the NVMe character device (ex: /dev/nvme0), or a namespace block device (ex: /dev/nvme0n1)\&.
+The <device> parameter is mandatory and may be either the NVMe character device (ex: /dev/nvme0)\&.
 .sp
 This will only work on WDC devices supporting this feature\&. Results for any other device are undefined\&.
-.SH "OPTIONS"
 .sp
-None
+On success it returns 0, error code otherwise\&.
+.SH "OUTPUT EXPLANATION"
+.TS
+allbox tab(:);
+ltB ltB.
+T{
+Field
+T}:T{
+Description
+T}
+.T&
+lt lt
+lt lt
+lt lt
+lt lt
+lt lt.
+T{
+.sp
+\fBPercent Life Used\&.\fR
+T}:T{
+.sp
+The percentage of drive function used\&.
+T}
+T{
+.sp
+\fBEOL (End of Life) Status\fR
+T}:T{
+.sp
+The 3 possible states are : Normal, Read Only, or End of Life\&.
+T}
+T{
+.sp
+\fBAssert Dump Status\fR
+T}:T{
+.sp
+The 2 possible states are : Present or Not Present\&.
+T}
+T{
+.sp
+\fBThermal Throttling Status\fR
+T}:T{
+.sp
+The 3 possible states are : Off, On, or Unavaiable\&.
+T}
+T{
+.sp
+\fBFormat Corrupt Reason\fR
+T}:T{
+.sp
+The 3 possible states are : Not Corrupted, Corrupt due to FW Assert, or Corrupt for Unknown Reason\&.
+T}
+.TE
+.sp 1
 .SH "EXAMPLES"
 .sp
 .RS 4
@@ -54,13 +105,13 @@ None
 .sp -1
 .IP \(bu 2.3
 .\}
-Clears the PCIe Correctable Error Count field returned in the smart\-log\-add command:
+Has the program issue WDC get\-drive\-status command :
 .sp
 .if n \{\
 .RS 4
 .\}
 .nf
-# nvme wdc clear\-pcie\-correctable\-errors /dev/nvme0
+# nvme wdc get\-drive\-status /dev/nvme0
 .fi
 .if n \{\
 .RE
@@ -68,4 +119,4 @@ Clears the PCIe Correctable Error Count field returned in the smart\-log\-add co
 .RE
 .SH "NVME"
 .sp
-Part of the nvme\-user suite
+Part of the nvme\-user suite\&.

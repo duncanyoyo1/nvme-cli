@@ -1,5 +1,5 @@
 '\" t
-.\"     Title: nvme-netapp-smdevices
+.\"     Title: nvme-wdc-clear-assert-dump
 .\"    Author: [FIXME: author] [see http://www.docbook.org/tdg5/en/html/author]
 .\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
 .\"      Date: 04/08/2019
@@ -7,7 +7,7 @@
 .\"    Source: NVMe
 .\"  Language: English
 .\"
-.TH "NVME\-NETAPP\-SMDEVI" "1" "04/08/2019" "NVMe" "NVMe Manual"
+.TH "NVME\-WDC\-CLEAR\-AS" "1" "04/08/2019" "NVMe" "NVMe Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -28,25 +28,22 @@
 .\" * MAIN CONTENT STARTS HERE *
 .\" -----------------------------------------------------------------
 .SH "NAME"
-nvme-netapp-smdevices \- Display information for each NVMe path to an E\-Series volume
+nvme-wdc-clear-assert-dump \- Clears the assert dump (if present)\&.
 .SH "SYNOPSIS"
 .sp
 .nf
-\fInvme netapp smdevices\fR [\-o <fmt> | \-\-output\-format=<fmt>]
+\fInvme wdc clear\-assert\-dump\fR <device>
 .fi
 .SH "DESCRIPTION"
 .sp
-Display vendor\-specific information for each NVMe path to an E\-Series namespace currently connected to the host\&. The E\-Series paths are identified from the NVMe nodes in /dev by sending an Identify Controller\&.
+For the NVMe device given, sends the wdc vendor unique clear assert dump command\&.
+.sp
+The <device> parameter is mandatory and must be the NVMe character device (ex: /dev/nvme0)\&.
+.sp
+This will only work on WDC devices supporting this feature\&. The command will not be executed on devices that don\(cqt support it\&.
 .SH "OPTIONS"
-.PP
-\-o <fmt>, \-\-output\-format=<fmt>
-.RS 4
-Set the reporting format to
-\fInormal\fR
-(default),
-\fIcolumn\fR, or
-\fIjson\fR\&. Only one output format can be used at a time\&.
-.RE
+.sp
+None
 .SH "EXAMPLES"
 .sp
 .RS 4
@@ -57,13 +54,13 @@ Set the reporting format to
 .sp -1
 .IP \(bu 2.3
 .\}
-Display information, in a column\-based format, for each path to an E\-Series namespace\&.
+Clears the assert dump (if present):
 .sp
 .if n \{\
 .RS 4
 .\}
 .nf
-# nvme netapp smdevices \-o column
+# nvme wdc clear\-assert\-dump /dev/nvme0
 .fi
 .if n \{\
 .RE

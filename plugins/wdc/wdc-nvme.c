@@ -31,6 +31,7 @@
 
 #include "linux/nvme_ioctl.h"
 
+#include "common.h"
 #include "nvme.h"
 #include "nvme-print.h"
 #include "nvme-ioctl.h"
@@ -46,7 +47,7 @@
 
 #define WRITE_SIZE	(sizeof(__u8) * 4096)
 
-#define WDC_NVME_SUBCMD_SHIFT	8
+#define WDC_NVME_SUBCMD_SHIFT				8
 
 #define WDC_NVME_LOG_SIZE_DATA_LEN			0x08
 #define WDC_NVME_LOG_SIZE_HDR_LEN			0x08
@@ -54,13 +55,14 @@
 /* Device Config */
 #define WDC_NVME_VID					0x1c58
 #define WDC_NVME_VID_2					0x1b96
-#define WDC_NVME_SNDK_VID			        0x15b7
+#define WDC_NVME_SNDK_VID				0x15b7
 
 #define WDC_NVME_SN100_DEV_ID				0x0003
 #define WDC_NVME_SN200_DEV_ID				0x0023
 #define WDC_NVME_SN630_DEV_ID				0x2200
 #define WDC_NVME_SN630_DEV_ID_1				0x2201
 #define WDC_NVME_SN840_DEV_ID				0x2300
+#define WDC_NVME_SN840_DEV_ID_1				0x2500
 #define WDC_NVME_SN640_DEV_ID				0x2400
 #define WDC_NVME_SN640_DEV_ID_1				0x2401
 #define WDC_NVME_SN640_DEV_ID_2				0x2402
@@ -71,21 +73,26 @@
 #define WDC_NVME_SN720_DEV_ID				0x5002
 #define WDC_NVME_SN730_DEV_ID				0x3714
 #define WDC_NVME_SN730_DEV_ID_1				0x3734
+#define WDC_NVME_SN340_DEV_ID				0x500d
 
 #define WDC_DRIVE_CAP_CAP_DIAG				0x0000000000000001
-#define WDC_DRIVE_CAP_INTERNAL_LOG	 		0x0000000000000002
+#define WDC_DRIVE_CAP_INTERNAL_LOG			0x0000000000000002
 #define WDC_DRIVE_CAP_C1_LOG_PAGE			0x0000000000000004
-#define WDC_DRIVE_CAP_CA_LOG_PAGE 			0x0000000000000008
-#define WDC_DRIVE_CAP_D0_LOG_PAGE 			0x0000000000000010
+#define WDC_DRIVE_CAP_CA_LOG_PAGE			0x0000000000000008
+#define WDC_DRIVE_CAP_D0_LOG_PAGE			0x0000000000000010
 #define WDC_DRIVE_CAP_DRIVE_STATUS			0x0000000000000020
 #define WDC_DRIVE_CAP_CLEAR_ASSERT			0x0000000000000040
 #define WDC_DRIVE_CAP_CLEAR_PCIE			0x0000000000000080
-#define WDC_DRIVE_CAP_RESIZE			0x0000000000000100
+#define WDC_DRIVE_CAP_RESIZE				0x0000000000000100
+#define WDC_DRIVE_CAP_NAND_STATS			0x0000000000000200
+#define WDC_DRIVE_CAP_DRIVE_LOG				0x0000000000000400
+#define WDC_DRIVE_CAP_CRASH_DUMP			0x0000000000000800
+#define WDC_DRIVE_CAP_PFAIL_DUMP			0x0000000000001000
 
 #define WDC_DRIVE_CAP_DRIVE_ESSENTIALS			0x0000000100000000
 #define WDC_DRIVE_CAP_DUI_DATA				0x0000000200000000
-
 #define WDC_SN730_CAP_VUC_LOG				0x0000000400000000
+#define WDC_DRIVE_CAP_SN340_DUI				0x0000000800000000
 #define WDC_DRIVE_CAP_SMART_LOG_MASK	(WDC_DRIVE_CAP_C1_LOG_PAGE | WDC_DRIVE_CAP_CA_LOG_PAGE | \
 					 WDC_DRIVE_CAP_D0_LOG_PAGE)
 
@@ -103,50 +110,52 @@
 #define SN730_LOG_CHUNK_SIZE				0x1000
 
 /* Drive Resize */
-#define WDC_NVME_DRIVE_RESIZE_OPCODE		0xCC
-#define WDC_NVME_DRIVE_RESIZE_CMD		0x03
-#define WDC_NVME_DRIVE_RESIZE_SUBCMD		0x01
+#define WDC_NVME_DRIVE_RESIZE_OPCODE			0xCC
+#define WDC_NVME_DRIVE_RESIZE_CMD			0x03
+#define WDC_NVME_DRIVE_RESIZE_SUBCMD			0x01
 
 /* Capture Diagnostics */
-#define WDC_NVME_CAP_DIAG_HEADER_TOC_SIZE	WDC_NVME_LOG_SIZE_DATA_LEN
+#define WDC_NVME_CAP_DIAG_HEADER_TOC_SIZE		WDC_NVME_LOG_SIZE_DATA_LEN
 #define WDC_NVME_CAP_DIAG_OPCODE			0xE6
-#define WDC_NVME_CAP_DIAG_CMD_OPCODE		0xC6
+#define WDC_NVME_CAP_DIAG_CMD_OPCODE			0xC6
 #define WDC_NVME_CAP_DIAG_SUBCMD			0x00
 #define WDC_NVME_CAP_DIAG_CMD				0x00
 
-#define WDC_NVME_CRASH_DUMP_TYPE		1
-#define WDC_NVME_PFAIL_DUMP_TYPE		2
+#define WDC_NVME_CRASH_DUMP_TYPE			1
+#define WDC_NVME_PFAIL_DUMP_TYPE			2
 
 /* Capture Device Unit Info */
-#define WDC_NVME_CAP_DUI_HEADER_SIZE  		0x400
-#define WDC_NVME_CAP_DUI_OPCODE      		0xFA
+#define WDC_NVME_CAP_DUI_HEADER_SIZE			0x400
+#define WDC_NVME_CAP_DUI_OPCODE				0xFA
+#define WDC_NVME_DUI_MAX_SECTION			0x3A
+#define WDC_NVME_DUI_MAX_DATA_AREA			0x05
 
 /* Crash dump */
-#define WDC_NVME_CRASH_DUMP_SIZE_DATA_LEN	WDC_NVME_LOG_SIZE_DATA_LEN
-#define WDC_NVME_CRASH_DUMP_SIZE_NDT		0x02
-#define WDC_NVME_CRASH_DUMP_SIZE_CMD		0x20
-#define WDC_NVME_CRASH_DUMP_SIZE_SUBCMD		0x03
+#define WDC_NVME_CRASH_DUMP_SIZE_DATA_LEN		WDC_NVME_LOG_SIZE_DATA_LEN
+#define WDC_NVME_CRASH_DUMP_SIZE_NDT			0x02
+#define WDC_NVME_CRASH_DUMP_SIZE_CMD			0x20
+#define WDC_NVME_CRASH_DUMP_SIZE_SUBCMD			0x03
 
 #define WDC_NVME_CRASH_DUMP_OPCODE			WDC_NVME_CAP_DIAG_CMD_OPCODE
 #define WDC_NVME_CRASH_DUMP_CMD				0x20
 #define WDC_NVME_CRASH_DUMP_SUBCMD			0x04
 
 /* PFail Crash dump */
-#define WDC_NVME_PF_CRASH_DUMP_SIZE_DATA_LEN	WDC_NVME_LOG_SIZE_HDR_LEN
-#define WDC_NVME_PF_CRASH_DUMP_SIZE_NDT		0x02
-#define WDC_NVME_PF_CRASH_DUMP_SIZE_CMD		0x20
-#define WDC_NVME_PF_CRASH_DUMP_SIZE_SUBCMD	0x05
+#define WDC_NVME_PF_CRASH_DUMP_SIZE_DATA_LEN		WDC_NVME_LOG_SIZE_HDR_LEN
+#define WDC_NVME_PF_CRASH_DUMP_SIZE_NDT			0x02
+#define WDC_NVME_PF_CRASH_DUMP_SIZE_CMD			0x20
+#define WDC_NVME_PF_CRASH_DUMP_SIZE_SUBCMD		0x05
 
-#define WDC_NVME_PF_CRASH_DUMP_OPCODE	    WDC_NVME_CAP_DIAG_CMD_OPCODE
-#define WDC_NVME_PF_CRASH_DUMP_CMD	    0x20
-#define WDC_NVME_PF_CRASH_DUMP_SUBCMD	    0x06
+#define WDC_NVME_PF_CRASH_DUMP_OPCODE			WDC_NVME_CAP_DIAG_CMD_OPCODE
+#define WDC_NVME_PF_CRASH_DUMP_CMD			0x20
+#define WDC_NVME_PF_CRASH_DUMP_SUBCMD			0x06
 
 /* Drive Log */
-#define WDC_NVME_DRIVE_LOG_SIZE_OPCODE		WDC_NVME_CAP_DIAG_CMD_OPCODE
-#define WDC_NVME_DRIVE_LOG_SIZE_DATA_LEN	WDC_NVME_LOG_SIZE_DATA_LEN
+#define WDC_NVME_DRIVE_LOG_SIZE_OPCODE			 WDC_NVME_CAP_DIAG_CMD_OPCODE
+#define WDC_NVME_DRIVE_LOG_SIZE_DATA_LEN		WDC_NVME_LOG_SIZE_DATA_LEN
 #define WDC_NVME_DRIVE_LOG_SIZE_NDT			0x02
 #define WDC_NVME_DRIVE_LOG_SIZE_CMD			0x20
-#define WDC_NVME_DRIVE_LOG_SIZE_SUBCMD		0x01
+#define WDC_NVME_DRIVE_LOG_SIZE_SUBCMD			0x01
 
 #define WDC_NVME_DRIVE_LOG_OPCODE			WDC_NVME_CAP_DIAG_CMD_OPCODE
 #define WDC_NVME_DRIVE_LOG_CMD				0x20
@@ -154,102 +163,104 @@
 
 /* Purge and Purge Monitor */
 #define WDC_NVME_PURGE_CMD_OPCODE			0xDD
-#define WDC_NVME_PURGE_MONITOR_OPCODE		0xDE
-#define WDC_NVME_PURGE_MONITOR_DATA_LEN		0x2F
-#define WDC_NVME_PURGE_MONITOR_CMD_CDW10	0x0000000C
-#define WDC_NVME_PURGE_MONITOR_TIMEOUT		0x7530
+#define WDC_NVME_PURGE_MONITOR_OPCODE			0xDE
+#define WDC_NVME_PURGE_MONITOR_DATA_LEN			0x2F
+#define WDC_NVME_PURGE_MONITOR_CMD_CDW10		0x0000000C
+#define WDC_NVME_PURGE_MONITOR_TIMEOUT			0x7530
 #define WDC_NVME_PURGE_CMD_SEQ_ERR			0x0C
 #define WDC_NVME_PURGE_INT_DEV_ERR			0x06
 
 #define WDC_NVME_PURGE_STATE_IDLE			0x00
 #define WDC_NVME_PURGE_STATE_DONE			0x01
 #define WDC_NVME_PURGE_STATE_BUSY			0x02
-#define WDC_NVME_PURGE_STATE_REQ_PWR_CYC	0x03
-#define WDC_NVME_PURGE_STATE_PWR_CYC_PURGE	0x04
+#define WDC_NVME_PURGE_STATE_REQ_PWR_CYC		0x03
+#define WDC_NVME_PURGE_STATE_PWR_CYC_PURGE		0x04
 
 /* Clear dumps */
-#define WDC_NVME_CLEAR_DUMP_OPCODE		0xFF
-#define WDC_NVME_CLEAR_CRASH_DUMP_CMD		0x03
-#define WDC_NVME_CLEAR_CRASH_DUMP_SUBCMD	0x05
-#define WDC_NVME_CLEAR_PF_CRASH_DUMP_SUBCMD	0x06
+#define WDC_NVME_CLEAR_DUMP_OPCODE			0xFF
+#define WDC_NVME_CLEAR_CRASH_DUMP_CMD			0x03
+#define WDC_NVME_CLEAR_CRASH_DUMP_SUBCMD		0x05
+#define WDC_NVME_CLEAR_PF_CRASH_DUMP_SUBCMD		0x06
 
 /* Additional Smart Log */
-#define WDC_ADD_LOG_BUF_LEN							0x4000
-#define WDC_NVME_ADD_LOG_OPCODE						0xC1
-#define WDC_GET_LOG_PAGE_SSD_PERFORMANCE			0x37
+#define WDC_ADD_LOG_BUF_LEN				0x4000
+#define WDC_NVME_ADD_LOG_OPCODE				0xC1
+#define WDC_GET_LOG_PAGE_SSD_PERFORMANCE		0x37
 #define WDC_NVME_GET_STAT_PERF_INTERVAL_LIFETIME	0x0F
 
 /* C2 Log Page */
 #define WDC_NVME_GET_DEV_MGMNT_LOG_PAGE_OPCODE		0xC2
-#define WDC_C2_LOG_BUF_LEN							0x1000
-#define WDC_C2_LOG_PAGES_SUPPORTED_ID				0x08
-#define WDC_C2_THERMAL_THROTTLE_STATUS_ID			0x18
-#define WDC_C2_ASSERT_DUMP_PRESENT_ID				0x19
-#define WDC_C2_USER_EOL_STATUS_ID     				0x1A
-#define WDC_C2_USER_EOL_STATE_ID      				0x1C
-#define WDC_C2_SYSTEM_EOL_STATE_ID     	    		0x1D
-#define WDC_C2_FORMAT_CORRUPT_REASON_ID  			0x1E
-#define WDC_EOL_STATUS_NORMAL                  		0x00000000
-#define WDC_EOL_STATUS_END_OF_LIFE             		0x00000001
-#define WDC_EOL_STATUS_READ_ONLY               		0x00000002
-#define WDC_ASSERT_DUMP_NOT_PRESENT      			0x00000000
-#define WDC_ASSERT_DUMP_PRESENT            			0x00000001
-#define WDC_THERMAL_THROTTLING_OFF        			0x00000000
-#define WDC_THERMAL_THROTTLING_ON          			0x00000001
-#define WDC_THERMAL_THROTTLING_UNAVAILABLE			0x00000002
-#define WDC_FORMAT_NOT_CORRUPT			 	        0x00000000
-#define WDC_FORMAT_CORRUPT_FW_ASSERT	 			0x00000001
-#define WDC_FORMAT_CORRUPT_UNKNOWN       			0x000000FF
+#define WDC_C2_LOG_BUF_LEN				0x1000
+#define WDC_C2_LOG_PAGES_SUPPORTED_ID			0x08
+#define WDC_C2_THERMAL_THROTTLE_STATUS_ID		0x18
+#define WDC_C2_ASSERT_DUMP_PRESENT_ID			0x19
+#define WDC_C2_USER_EOL_STATUS_ID			0x1A
+#define WDC_C2_USER_EOL_STATE_ID			0x1C
+#define WDC_C2_SYSTEM_EOL_STATE_ID			0x1D
+#define WDC_C2_FORMAT_CORRUPT_REASON_ID			0x1E
+#define WDC_EOL_STATUS_NORMAL				0x00000000
+#define WDC_EOL_STATUS_END_OF_LIFE			0x00000001
+#define WDC_EOL_STATUS_READ_ONLY			0x00000002
+#define WDC_ASSERT_DUMP_NOT_PRESENT			0x00000000
+#define WDC_ASSERT_DUMP_PRESENT				0x00000001
+#define WDC_THERMAL_THROTTLING_OFF			0x00000000
+#define WDC_THERMAL_THROTTLING_ON			0x00000001
+#define WDC_THERMAL_THROTTLING_UNAVAILABLE		0x00000002
+#define WDC_FORMAT_NOT_CORRUPT				0x00000000
+#define WDC_FORMAT_CORRUPT_FW_ASSERT			0x00000001
+#define WDC_FORMAT_CORRUPT_UNKNOWN			0x000000FF
 
 /* CA Log Page */
-#define WDC_NVME_GET_DEVICE_INFO_LOG_OPCODE			0xCA
-#define WDC_CA_LOG_BUF_LEN							0x80
+#define WDC_NVME_GET_DEVICE_INFO_LOG_OPCODE		0xCA
+#define WDC_CA_LOG_BUF_LEN				0x80
 
 /* C0 EOL Status Log Page */
-#define WDC_NVME_GET_EOL_STATUS_LOG_OPCODE			0xC0
-#define WDC_NVME_EOL_STATUS_LOG_LEN       			0x200
+#define WDC_NVME_GET_EOL_STATUS_LOG_OPCODE		0xC0
+#define WDC_NVME_EOL_STATUS_LOG_LEN			0x200
 
 /* D0 Smart Log Page */
-#define WDC_NVME_GET_VU_SMART_LOG_OPCODE			0xD0
-#define WDC_NVME_VU_SMART_LOG_LEN       			0x200
+#define WDC_NVME_GET_VU_SMART_LOG_OPCODE		0xD0
+#define WDC_NVME_VU_SMART_LOG_LEN			0x200
 
 /* Clear PCIe Correctable Errors */
-#define WDC_NVME_CLEAR_PCIE_CORR_OPCODE  	WDC_NVME_CAP_DIAG_CMD_OPCODE
-#define WDC_NVME_CLEAR_PCIE_CORR_CMD		0x22
-#define WDC_NVME_CLEAR_PCIE_CORR_SUBCMD		0x04
+#define WDC_NVME_CLEAR_PCIE_CORR_OPCODE			WDC_NVME_CAP_DIAG_CMD_OPCODE
+#define WDC_NVME_CLEAR_PCIE_CORR_CMD			0x22
+#define WDC_NVME_CLEAR_PCIE_CORR_SUBCMD			0x04
 
 /* Clear Assert Dump Status */
-#define WDC_NVME_CLEAR_ASSERT_DUMP_OPCODE  	0xD8
-#define WDC_NVME_CLEAR_ASSERT_DUMP_CMD		0x03
-#define WDC_NVME_CLEAR_ASSERT_DUMP_SUBCMD	0x05
+#define WDC_NVME_CLEAR_ASSERT_DUMP_OPCODE		0xD8
+#define WDC_NVME_CLEAR_ASSERT_DUMP_CMD			0x03
+#define WDC_NVME_CLEAR_ASSERT_DUMP_SUBCMD		0x05
 
 /* Drive Essentials */
 #define WDC_DE_DEFAULT_NUMBER_OF_ERROR_ENTRIES		64
-#define WDC_DE_GENERIC_BUFFER_SIZE					80
-#define WDC_DE_GLOBAL_NSID							0xFFFFFFFF
-#define WDC_DE_DEFAULT_NAMESPACE_ID					0x01
-#define WDC_DE_PATH_SEPARATOR						"/"
-#define WDC_DE_TAR_FILES							"*.bin"
-#define WDC_DE_TAR_FILE_EXTN						".tar.gz"
-#define WDC_DE_TAR_CMD								"tar -czf"
+#define WDC_DE_GENERIC_BUFFER_SIZE			80
+#define WDC_DE_GLOBAL_NSID				0xFFFFFFFF
+#define WDC_DE_DEFAULT_NAMESPACE_ID			0x01
+#define WDC_DE_PATH_SEPARATOR				"/"
+#define WDC_DE_TAR_FILES				"*.bin"
+#define WDC_DE_TAR_FILE_EXTN				".tar.gz"
+#define WDC_DE_TAR_CMD					"tar -czf"
+
+/* VS NAND Stats */
+#define WDC_NVME_NAND_STATS_LOG_ID			0xFB
+#define WDC_NVME_NAND_STATS_SIZE			0x200
 
 /* VU Opcodes */
-#define WDC_DE_VU_READ_SIZE_OPCODE					0xC0
-#define WDC_DE_VU_READ_BUFFER_OPCODE				0xC2
+#define WDC_DE_VU_READ_SIZE_OPCODE			0xC0
+#define WDC_DE_VU_READ_BUFFER_OPCODE			0xC2
 
-#define WDC_DE_FILE_HEADER_SIZE                     4
-#define WDC_DE_FILE_OFFSET_SIZE                     2
-#define WDC_DE_FILE_NAME_SIZE                       32
+#define WDC_DE_FILE_HEADER_SIZE				4
+#define WDC_DE_FILE_OFFSET_SIZE				2
+#define WDC_DE_FILE_NAME_SIZE				32
 #define WDC_DE_VU_READ_BUFFER_STANDARD_OFFSET		0x8000
-#define WDC_DE_READ_MAX_TRANSFER_SIZE				0x8000
+#define WDC_DE_READ_MAX_TRANSFER_SIZE			0x8000
 
 #define WDC_DE_MANUFACTURING_INFO_PAGE_FILE_NAME	"manufacturing_info"  /* Unique log entry page name. */
-#define WDC_DE_CORE_DUMP_FILE_NAME					"core_dump"
-#define WDC_DE_EVENT_LOG_FILE_NAME					"event_log"
-#define WDC_DE_DESTN_SPI							1
-#define WDC_DE_DUMPTRACE_DESTINATION				6
-
-#define min(x, y) ((x) > (y) ? (y) : (x))
+#define WDC_DE_CORE_DUMP_FILE_NAME			"core_dump"
+#define WDC_DE_EVENT_LOG_FILE_NAME			"event_log"
+#define WDC_DE_DESTN_SPI				1
+#define WDC_DE_DUMPTRACE_DESTINATION			6
 
 typedef enum _NVME_FEATURES_SELECT
 {
@@ -435,12 +446,19 @@ struct wdc_e6_log_hdr {
 };
 
 /* DUI log header */
+struct wdc_dui_log_section {
+	__le16	section_type;
+	__le16	data_area_id;
+	__le32	section_size;
+};
+
 struct wdc_dui_log_hdr {
 	__u8    telemetry_hdr[512];
 	__le16	hdr_version;
 	__le16	section_count;
 	__u8	log_size[4];
-	__u8    log_data[504];
+	struct	wdc_dui_log_section log_section[WDC_NVME_DUI_MAX_SECTION];
+	__u8    log_data[40];
 };
 
 /* Purge monitor response */
@@ -507,54 +525,66 @@ struct wdc_c2_cbs_data {
 };
 
 struct __attribute__((__packed__)) wdc_ssd_ca_perf_stats {
-	__le64	nand_bytes_wr_lo;			/* 0x00 - NAND Bytes Written lo				*/
-	__le64	nand_bytes_wr_hi;			/* 0x08 - NAND Bytes Written hi				*/
-	__le64	nand_bytes_rd_lo;			/* 0x10 - NAND Bytes Read lo				*/
-	__le64	nand_bytes_rd_hi;			/* 0x18 - NAND Bytes Read hi				*/
-	__le64	nand_bad_block;				/* 0x20 - NAND Bad Block Count				*/
-	__le64	uncorr_read_count;			/* 0x28 - Uncorrectable Read Count			*/
-	__le64	ecc_error_count;			/* 0x30 - Soft ECC Error Count				*/
-	__le32	ssd_detect_count;			/* 0x38 - SSD End to End Detection Count	*/
-	__le32	ssd_correct_count;			/* 0x3C - SSD End to End Correction Count	*/
-	__le32	data_percent_used;			/* 0x40 - System Data Percent Used			*/
-	__le32	data_erase_max;				/* 0x44 - User Data Erase Counts			*/
-	__le32	data_erase_min;				/* 0x48 - User Data Erase Counts			*/
-	__le64	refresh_count;				/* 0x4c - Refresh Count						*/
-	__le64	program_fail;				/* 0x54 - Program Fail Count				*/
-	__le64	user_erase_fail;			/* 0x5C - User Data Erase Fail Count		*/
-	__le64	system_erase_fail;			/* 0x64 - System Area Erase Fail Count		*/
-	__le16	thermal_throttle_status;	/* 0x6C - Thermal Throttling Status			*/
-	__le16	thermal_throttle_count;		/* 0x6E - Thermal Throttling Count			*/
-	__le64	pcie_corr_error;			/* 0x70 - pcie Correctable Error Count		*/
-	__le32	rsvd1;						/* 0x78 - Reserved							*/
-	__le32	rsvd2;						/* 0x7C - Reserved							*/
+	__le64  nand_bytes_wr_lo;                       /* 0x00 - NAND Bytes Written lo             */
+	__le64  nand_bytes_wr_hi;                       /* 0x08 - NAND Bytes Written hi             */
+	__le64  nand_bytes_rd_lo;                       /* 0x10 - NAND Bytes Read lo                */
+	__le64  nand_bytes_rd_hi;                       /* 0x18 - NAND Bytes Read hi                */
+	__le64  nand_bad_block;                         /* 0x20 - NAND Bad Block Count              */
+	__le64  uncorr_read_count;                      /* 0x28 - Uncorrectable Read Count          */
+	__le64  ecc_error_count;                        /* 0x30 - Soft ECC Error Count              */
+	__le32  ssd_detect_count;                       /* 0x38 - SSD End to End Detection Count    */
+	__le32  ssd_correct_count;                      /* 0x3C - SSD End to End Correction Count   */
+	__u8    data_percent_used;                      /* 0x40 - System Data Percent Used          */
+	__le32  data_erase_max;                         /* 0x41 - User Data Erase Counts            */
+	__le32  data_erase_min;                         /* 0x45 - User Data Erase Counts            */
+	__le64  refresh_count;                          /* 0x49 - Refresh Count                     */
+	__le64  program_fail;                           /* 0x51 - Program Fail Count                */
+	__le64  user_erase_fail;                        /* 0x59 - User Data Erase Fail Count        */
+	__le64  system_erase_fail;                      /* 0x61 - System Area Erase Fail Count      */
+	__u8    thermal_throttle_status;                /* 0x69 - Thermal Throttling Status         */
+	__u8    thermal_throttle_count;                 /* 0x6A - Thermal Throttling Count          */
+	__le64  pcie_corr_error;                        /* 0x6B - pcie Correctable Error Count      */
+	__le32  incomplete_shutdown_count;              /* 0x73 - Incomplete Shutdown Count         */
+	__u8    percent_free_blocks;                    /* 0x77 - Percent Free Blocks               */
+	__u8    rsvd[392];                              /* 0x78 - Reserved bytes 120-511            */
 };
 
 struct __attribute__((__packed__)) wdc_ssd_d0_smart_log {
-    __le32  lifetime_wrt_amp_factor;              /* 0x00 - Lifetime write amplification factor         */
-    __le32  trailing_hr_wrt_amp_factor;           /* 0x04 - Trailing hour write amplification factor    */
-    __le32  percentage_pe_cycles_remaining;       /* 0x08 - Percentage of P/E cycles remaining          */
-    __le32  lifetime_link_rate_downgrade_count;   /* 0x0C - Lifetime link rate downgrade count          */
-    __le32  lifetime_block_erase_fail_count;      /* 0x10 - Lifetime block erase fail count             */
-    __le32  lifetime_program_fail_count;          /* 0x14 - Lifetime program fail count                 */
-    __le64  lifetime_user_writes;                 /* 0x18 - Lifetime user writes                        */
-    __le64  lifetime_nand_writes;                 /* 0x20 - Lifetime NAND writes                        */
-    __le64  lifetime_user_reads;                  /* 0x28 - Lifetime user reads                         */
-    __le32  lifetime_retired_block_count;         /* 0x30 - Lifetime retired block count                */
-    __le32  lifetime_read_disturb_realloc_events; /* 0x34 - Lifetime read disturb reallocation events   */
-    __le32  lifetime_die_failure_count;           /* 0x38 - Lifetime die failure count                  */
-    __le32  current_temp;                         /* 0x3C - Current temperature                         */
-    __le32  max_recorded_temp;                    /* 0x40 - Max recorded temperature                    */
-    __le32  lifetime_thermal_throttle_act;        /* 0x44 - Lifetime thermal throttle activations       */
-    __le32  capacitor_health;                     /* 0x48 - Capacitor health                            */
-    __le32  reserve_erase_block_count;            /* 0x4C - Reserve erase block count                   */
-    __le32  lifetime_uecc_count;                  /* 0x50 - Lifetime UECC count                         */
-    __le32  lifetime_realloc_erase_block_count;   /* 0x54 - Lifetime reallocated erase block count      */
-    __le32  lifetime_power_on_hours;              /* 0x58 - Lifetime power on hours                     */
-    __le32  power_loss_counters;                  /* 0x5C - Power loss counters                         */
-    __le32  lifetime_clean_shutdown_count;        /* 0x60 - Lifetime clean shutdown count on power loss */
-    __le32  lifetime_unclean_shutdown_count;      /* 0x64 - Lifetime unclean shutdowns on power loss    */
-    __u8    rsvd_104[0x198];                      /* 0x68-0x1FF Reserved                                */
+    __le32  smart_log_page_header;                 /* 0x00 - Smart Log Page Header                       */
+    __le32  lifetime_realloc_erase_block_count;    /* 0x04 - Lifetime reallocated erase block count      */
+    __le32  lifetime_power_on_hours;               /* 0x08 - Lifetime power on hours                     */
+    __le32  lifetime_uecc_count;                   /* 0x0C - Lifetime UECC count                         */
+    __le32  lifetime_wrt_amp_factor;               /* 0x10 - Lifetime write amplification factor         */
+    __le32  trailing_hr_wrt_amp_factor;            /* 0x14 - Trailing hour write amplification factor    */
+    __le32  reserve_erase_block_count;             /* 0x18 - Reserve erase block count                   */
+    __le32  lifetime_program_fail_count;           /* 0x1C - Lifetime program fail count                 */
+    __le32  lifetime_block_erase_fail_count;       /* 0x20 - Lifetime block erase fail count             */
+    __le32  lifetime_die_failure_count;            /* 0x24 - Lifetime die failure count                  */
+    __le32  lifetime_link_rate_downgrade_count;    /* 0x28 - Lifetime link rate downgrade count          */
+    __le32  lifetime_clean_shutdown_count;         /* 0x2C - Lifetime clean shutdown count on power loss */
+    __le32  lifetime_unclean_shutdown_count;       /* 0x30 - Lifetime unclean shutdowns on power loss    */
+    __le32  current_temp;                          /* 0x34 - Current temperature                         */
+    __le32  max_recorded_temp;                     /* 0x38 - Max recorded temperature                    */
+    __le32  lifetime_retired_block_count;          /* 0x3C - Lifetime retired block count                */
+    __le32  lifetime_read_disturb_realloc_events;  /* 0x40 - Lifetime read disturb reallocation events   */
+    __le64  lifetime_nand_writes;                  /* 0x44 - Lifetime NAND write Lpages                  */
+    __le32  capacitor_health;                      /* 0x4C - Capacitor health                            */
+    __le64  lifetime_user_writes;                  /* 0x50 - Lifetime user writes                        */
+    __le64  lifetime_user_reads;                   /* 0x58 - Lifetime user reads                         */
+    __le32  lifetime_thermal_throttle_act;         /* 0x60 - Lifetime thermal throttle activations       */
+    __le32  percentage_pe_cycles_remaining;        /* 0x64 - Percentage of P/E cycles remaining          */
+    __u8    rsvd[408];                             /* 0x68 - 408 Reserved bytes                          */
+};
+
+/* NAND Stats */
+struct __attribute__((__packed__)) wdc_nand_stats {
+	__u8		nand_write_tlc[16];
+	__u8		nand_write_slc[16];
+	__le32		nand_prog_failure;
+	__le32		nand_erase_failure;
+	__le32		bad_block_count;
+	__le64		nand_rec_trigger_event;
+	__u8		rsvd[460];
 };
 
 static double safe_div_fp(double numerator, double denominator)
@@ -566,6 +596,18 @@ static double calc_percent(uint64_t numerator, uint64_t denominator)
 {
 	return denominator ?
 		(uint64_t)(((double)numerator / (double)denominator) * 100) : 0;
+}
+
+static long double int128_to_double(__u8 *data)
+{
+	int i;
+	long double result = 0;
+
+	for (i = 0; i < 16; i++) {
+		result *= 256;
+		result += data[15 - i];
+	}
+	return result;
 }
 
 static int wdc_get_pci_ids(int *device_id, int *vendor_id)
@@ -679,10 +721,12 @@ static __u64 wdc_get_drive_capabilities(int fd) {
 	case WDC_NVME_VID:
 		switch (read_device_id) {
 		case WDC_NVME_SN100_DEV_ID:
-			capabilities = (WDC_DRIVE_CAP_CAP_DIAG | WDC_DRIVE_CAP_INTERNAL_LOG | WDC_DRIVE_CAP_C1_LOG_PAGE);
+			capabilities = (WDC_DRIVE_CAP_CAP_DIAG | WDC_DRIVE_CAP_INTERNAL_LOG | WDC_DRIVE_CAP_C1_LOG_PAGE |
+					WDC_DRIVE_CAP_DRIVE_LOG | WDC_DRIVE_CAP_CRASH_DUMP | WDC_DRIVE_CAP_PFAIL_DUMP);
 			break;
 		case WDC_NVME_SN200_DEV_ID:
-			capabilities = (WDC_DRIVE_CAP_CAP_DIAG | WDC_DRIVE_CAP_INTERNAL_LOG);
+			capabilities = (WDC_DRIVE_CAP_CAP_DIAG | WDC_DRIVE_CAP_INTERNAL_LOG | WDC_DRIVE_CAP_CLEAR_PCIE |
+					WDC_DRIVE_CAP_DRIVE_LOG | WDC_DRIVE_CAP_CRASH_DUMP | WDC_DRIVE_CAP_PFAIL_DUMP);
 
 			/* verify the 0xCA log page is supported */
 			if (wdc_nvme_check_supported_log_page(fd, WDC_NVME_GET_DEVICE_INFO_LOG_OPCODE) == true)
@@ -709,9 +753,11 @@ static __u64 wdc_get_drive_capabilities(int fd) {
 		case WDC_NVME_SN640_DEV_ID_2:
 		/* FALLTHRU */
 		case WDC_NVME_SN840_DEV_ID:
+		/* FALLTHRU */
+		case WDC_NVME_SN840_DEV_ID_1:
 			capabilities = (WDC_DRIVE_CAP_CAP_DIAG | WDC_DRIVE_CAP_INTERNAL_LOG |
 					WDC_DRIVE_CAP_DRIVE_STATUS | WDC_DRIVE_CAP_CLEAR_ASSERT |
-					WDC_DRIVE_CAP_RESIZE);
+					WDC_DRIVE_CAP_RESIZE | WDC_DRIVE_CAP_CLEAR_PCIE);
 
 			/* verify the 0xCA log page is supported */
 			if (wdc_nvme_check_supported_log_page(fd, WDC_NVME_GET_DEVICE_INFO_LOG_OPCODE) == true)
@@ -740,9 +786,12 @@ static __u64 wdc_get_drive_capabilities(int fd) {
 		case WDC_NVME_SN520_DEV_ID_1:
 		/* FALLTHRU */
 		case WDC_NVME_SN520_DEV_ID_2:
-		/* FALLTHRU */
-		case WDC_NVME_SN720_DEV_ID:
 			capabilities = WDC_DRIVE_CAP_DUI_DATA;
+		case WDC_NVME_SN720_DEV_ID:
+			capabilities = WDC_DRIVE_CAP_DUI_DATA | WDC_DRIVE_CAP_NAND_STATS;
+			break;
+		case WDC_NVME_SN340_DEV_ID:
+			capabilities = WDC_DRIVE_CAP_SN340_DUI;
 			break;
 		default:
 			capabilities = 0;
@@ -1142,8 +1191,14 @@ static int wdc_do_dump_e6(int fd, __u32 opcode,__u32 data_len,
 
 	if (ret == 0) {
 		fprintf(stderr, "%s:  NVMe Status:%s(%x)\n", __func__, nvme_status_to_string(ret), ret);
-		ret = wdc_create_log_file(file, dump_data, data_len);
+	} else {
+		fprintf(stderr, "%s:  FAILURE: NVMe Status:%s(%x)\n", __func__, nvme_status_to_string(ret), ret);
+		fprintf(stderr, "%s:  Partial data may have been captured\n", __func__);
+		snprintf(file + strlen(file), PATH_MAX, "%s", "-PARTIAL");
 	}
+
+	ret = wdc_create_log_file(file, dump_data, data_len);
+
 	free(dump_data);
 	return ret;
 }
@@ -1154,20 +1209,12 @@ static int wdc_do_cap_diag(int fd, char *file, __u32 xfer_size)
 	__u32 e6_log_hdr_size = WDC_NVME_CAP_DIAG_HEADER_TOC_SIZE;
 	struct wdc_e6_log_hdr *log_hdr;
 	__u32 cap_diag_length;
-	int verify_file;
-
- 	/* verify the passed in file name and path is valid before getting the dump data */
-	verify_file = open(file, O_WRONLY | O_CREAT | O_TRUNC, 0666);
-	if (verify_file < 0) {
-		fprintf(stderr, "ERROR : WDC: open : %s\n", strerror(errno));
-		return -1;
-	}
-	close(verify_file);
 
 	log_hdr = (struct wdc_e6_log_hdr *) malloc(e6_log_hdr_size);
 	if (log_hdr == NULL) {
 		fprintf(stderr, "%s: ERROR : malloc : %s\n", __func__, strerror(errno));
-		return -1;
+		ret = -1;
+		goto out;
 	}
 	memset(log_hdr, 0, e6_log_hdr_size);
 
@@ -1176,8 +1223,8 @@ static int wdc_do_cap_diag(int fd, char *file, __u32 xfer_size)
 						0x00,
 						log_hdr);
 	if (ret == -1) {
-		free(log_hdr);
-		return -1;
+		ret = -1;
+		goto out;
 	}
 
 	cap_diag_length = (log_hdr->log_size[0] << 24 | log_hdr->log_size[1] << 16 |
@@ -1186,9 +1233,6 @@ static int wdc_do_cap_diag(int fd, char *file, __u32 xfer_size)
 	if (cap_diag_length == 0) {
 		fprintf(stderr, "INFO : WDC : Capture Diagnostics log is empty\n");
 	} else {
-		if (xfer_size == 0)
-			xfer_size = cap_diag_length;
-
 		ret = wdc_do_dump_e6(fd, WDC_NVME_CAP_DIAG_OPCODE, cap_diag_length,
 						(WDC_NVME_CAP_DIAG_SUBCMD << WDC_NVME_SUBCMD_SHIFT) | WDC_NVME_CAP_DIAG_CMD,
 						file, xfer_size, (__u8 *)log_hdr);
@@ -1196,11 +1240,12 @@ static int wdc_do_cap_diag(int fd, char *file, __u32 xfer_size)
 		fprintf(stderr, "INFO : WDC : Capture Diagnostics log, length = 0x%x\n", cap_diag_length);
 	}
 
+out:
 	free(log_hdr);
 	return ret;
 }
 
-static int wdc_do_cap_dui(int fd, char *file, __u32 xfer_size)
+static int wdc_do_cap_dui(int fd, char *file, __u32 xfer_size, int data_area)
 {
 	int ret = 0;
 	__u32 dui_log_hdr_size = WDC_NVME_CAP_DUI_HEADER_SIZE;
@@ -1209,7 +1254,8 @@ static int wdc_do_cap_dui(int fd, char *file, __u32 xfer_size)
 	__u8 *dump_data;
 	__u64 buffer_addr;
 	__u32 curr_data_offset;
-	__s32 log_size;
+	__s32 log_size = 0;
+	__s32 total_size = 0;
 	int i;
 
 	log_hdr = (struct wdc_dui_log_hdr *) malloc(dui_log_hdr_size);
@@ -1220,16 +1266,11 @@ static int wdc_do_cap_dui(int fd, char *file, __u32 xfer_size)
 	memset(log_hdr, 0, dui_log_hdr_size);
 
 	/* get the dui telemetry and log headers  */
-	ret = wdc_dump_dui_data(fd,
-						WDC_NVME_CAP_DUI_HEADER_SIZE,
-						0x00,
-						(__u8 *)log_hdr);
+	ret = wdc_dump_dui_data(fd, WDC_NVME_CAP_DUI_HEADER_SIZE, 0x00,	(__u8 *)log_hdr);
 	if (ret != 0) {
-		free(log_hdr);
 		fprintf(stderr, "%s: ERROR : WDC : Get DUI headers failed\n", __func__);
 		fprintf(stderr, "%s: ERROR : WDC : NVMe Status:%s(%x)\n", __func__, nvme_status_to_string(ret), ret);
-
-		return ret;
+		goto out;
 	}
 
 	cap_dui_length = (log_hdr->log_size[3] << 24 | log_hdr->log_size[2] << 16 |
@@ -1238,24 +1279,35 @@ static int wdc_do_cap_dui(int fd, char *file, __u32 xfer_size)
 	if (cap_dui_length == 0) {
 		fprintf(stderr, "INFO : WDC : Capture Device Unit Info log is empty\n");
 	} else {
-		if (xfer_size == 0)
-			xfer_size = cap_dui_length;
 
-		dump_data = (__u8 *) malloc(sizeof (__u8) * cap_dui_length);
+		/* parse log header for all sections up to specified data area inclusively */
+		if (data_area != WDC_NVME_DUI_MAX_DATA_AREA) {
+			for(int i = 0; i < WDC_NVME_DUI_MAX_SECTION; i++) {
+				if (log_hdr->log_section[i].data_area_id <= data_area &&
+				    log_hdr->log_section[i].data_area_id != 0)
+					log_size += log_hdr->log_section[i].section_size;
+				else
+					break;
+			}
+		} else
+			log_size = cap_dui_length;
 
+		total_size = log_size;
+		dump_data = (__u8 *) malloc(sizeof (__u8) * total_size);
 		if (dump_data == NULL) {
 			fprintf(stderr, "%s: ERROR : malloc : %s\n", __func__, strerror(errno));
-			return -1;
+			ret = -1;
+			goto out;
 		}
-		memset(dump_data, 0, sizeof (__u8) * cap_dui_length);
+		memset(dump_data, 0, sizeof (__u8) * total_size);
 
 		/* copy the telemetry and log headers into the dump_data buffer */
 		memcpy(dump_data, log_hdr, WDC_NVME_CAP_DUI_HEADER_SIZE);
 
+		log_size -= WDC_NVME_CAP_DUI_HEADER_SIZE;
 		curr_data_offset = WDC_NVME_CAP_DUI_HEADER_SIZE;
 		i = 0;
 
-		log_size = (cap_dui_length - WDC_NVME_CAP_DUI_HEADER_SIZE);
 		for(; log_size > 0; log_size -= xfer_size) {
 			xfer_size = min(xfer_size, log_size);
 
@@ -1263,7 +1315,7 @@ static int wdc_do_cap_dui(int fd, char *file, __u32 xfer_size)
 			ret = wdc_dump_dui_data(fd, xfer_size, curr_data_offset, (__u8 *)buffer_addr);
 			if (ret != 0) {
 				fprintf(stderr, "%s: ERROR : WDC : Get chunk %d, size = 0x%x, offset = 0x%x, addr = 0x%lx\n",
-						__func__, i, cap_dui_length, curr_data_offset, (long unsigned int)buffer_addr);
+						__func__, i, total_size, curr_data_offset, (long unsigned int)buffer_addr);
 				fprintf(stderr, "%s: ERROR : WDC : NVMe Status:%s(%x)\n", __func__, nvme_status_to_string(ret), ret);
 				break;
 			}
@@ -1274,12 +1326,13 @@ static int wdc_do_cap_dui(int fd, char *file, __u32 xfer_size)
 
 		if (ret == 0) {
 			fprintf(stderr, "%s:  NVMe Status:%s(%x)\n", __func__, nvme_status_to_string(ret), ret);
-			fprintf(stderr, "INFO : WDC : Capture Device Unit Info log, length = 0x%x\n", cap_dui_length);
+			fprintf(stderr, "INFO : WDC : Capture Device Unit Info log, length = 0x%x\n", total_size);
 
-			ret = wdc_create_log_file(file, dump_data, cap_dui_length);
+			ret = wdc_create_log_file(file, dump_data, total_size);
 		}
 		free(dump_data);
 	}
+out:
 	free(log_hdr);
 	return ret;
 }
@@ -1573,6 +1626,7 @@ static int wdc_vs_internal_fw_log(int argc, char **argv, struct command *command
 	char *desc = "Internal Firmware Log.";
 	char *file = "Output file pathname.";
 	char *size = "Data retrieval transfer size.";
+	char *data_area = "Data area to retrieve up to.";
 	char f[PATH_MAX] = {0};
 	char fileSuffix[PATH_MAX] = {0};
 	__u32 xfer_size = 0;
@@ -1584,16 +1638,19 @@ static int wdc_vs_internal_fw_log(int argc, char **argv, struct command *command
 	struct config {
 		char *file;
 		__u32 xfer_size;
+		int data_area;
 	};
 
 	struct config cfg = {
 		.file = NULL,
-		.xfer_size = 0x10000
+		.xfer_size = 0x10000,
+		.data_area = 5
 	};
 
 	const struct argconfig_commandline_options command_line_options[] = {
 		{"output-file", 'o', "FILE", CFG_STRING, &cfg.file, required_argument, file},
 		{"transfer-size", 's', "NUM", CFG_POSITIVE, &cfg.xfer_size, required_argument, size},
+		{"data-area", 'd', "NUM", CFG_POSITIVE, &cfg.data_area, required_argument, data_area},
 		{ NULL, '\0', NULL, CFG_NONE, NULL, no_argument, desc},
 	};
 
@@ -1603,11 +1660,23 @@ static int wdc_vs_internal_fw_log(int argc, char **argv, struct command *command
 
 	if (!wdc_check_device(fd))
 		return -1;
-	if (cfg.xfer_size != 0) {
+	if (cfg.xfer_size != 0)
 		xfer_size = cfg.xfer_size;
+	else {
+		fprintf(stderr, "ERROR : WDC : Invalid length\n");
+		return -1;
 	}
 
 	if (cfg.file != NULL) {
+		int verify_file;
+
+		/* verify the passed in file name and path is valid before getting the dump data */
+		verify_file = open(cfg.file, O_WRONLY | O_CREAT | O_TRUNC, 0666);
+		if (verify_file < 0) {
+			fprintf(stderr, "ERROR : WDC: open : %s\n", strerror(errno));
+			return -1;
+		}
+		close(verify_file);
 		strncpy(f, cfg.file, PATH_MAX - 1);
 	} else {
 		wdc_UtilsGetTime(&timeInfo);
@@ -1626,11 +1695,18 @@ static int wdc_vs_internal_fw_log(int argc, char **argv, struct command *command
 		snprintf(f + strlen(f), PATH_MAX, "%s", ".bin");
 	fprintf(stderr, "%s: filename = %s\n", __func__, f);
 
+	if (cfg.data_area > 5 || cfg.data_area == 0) {
+		fprintf(stderr, "ERROR : WDC: Data area must be 1-5\n");
+		return -1;
+	}
+
 	capabilities = wdc_get_drive_capabilities(fd);
 	if ((capabilities & WDC_DRIVE_CAP_INTERNAL_LOG) == WDC_DRIVE_CAP_INTERNAL_LOG) {
 		return wdc_do_cap_diag(fd, f, xfer_size);
+	} else if ((capabilities & WDC_DRIVE_CAP_SN340_DUI) == WDC_DRIVE_CAP_SN340_DUI) {
+		return wdc_do_cap_dui(fd, f, xfer_size, cfg.data_area);
 	} else if ((capabilities & WDC_DRIVE_CAP_DUI_DATA) == WDC_DRIVE_CAP_DUI_DATA) {
-		return wdc_do_cap_dui(fd, f, xfer_size);
+		return wdc_do_cap_dui(fd, f, xfer_size, WDC_NVME_DUI_MAX_DATA_AREA);
 	} else if ((capabilities & WDC_SN730_CAP_VUC_LOG) == WDC_SN730_CAP_VUC_LOG) {
 		return wdc_do_sn730_get_and_tar(fd, f);
 	} else {
@@ -1779,6 +1855,8 @@ static int wdc_drive_log(int argc, char **argv, struct command *command,
 	const char *file = "Output file pathname.";
 	char f[PATH_MAX] = {0};
 	int fd;
+	int ret;
+	__u64 capabilities = 0;
 	struct config {
 		char *file;
 	};
@@ -1798,14 +1876,22 @@ static int wdc_drive_log(int argc, char **argv, struct command *command,
 
 	if (!wdc_check_device(fd))
 		return -1;
-	if (cfg.file != NULL) {
-		strncpy(f, cfg.file, PATH_MAX - 1);
+	capabilities = wdc_get_drive_capabilities(fd);
+
+	if ((capabilities & WDC_DRIVE_CAP_DRIVE_LOG) == 0) {
+		fprintf(stderr, "ERROR : WDC: unsupported device for this command\n");
+		ret = -1;
+	} else {
+		if (cfg.file != NULL) {
+			strncpy(f, cfg.file, PATH_MAX - 1);
+		}
+		if (wdc_get_serial_name(fd, f, PATH_MAX, "drive_log") == -1) {
+			fprintf(stderr, "ERROR : WDC : failed to generate file name\n");
+			return -1;
+		}
+		ret = wdc_do_drive_log(fd, f);
 	}
-	if (wdc_get_serial_name(fd, f, PATH_MAX, "drive_log") == -1) {
-		fprintf(stderr, "ERROR : WDC : failed to generate file name\n");
-		return -1;
-	}
-	return wdc_do_drive_log(fd, f);
+	return ret;
 }
 
 static int wdc_get_crash_dump(int argc, char **argv, struct command *command,
@@ -1815,6 +1901,7 @@ static int wdc_get_crash_dump(int argc, char **argv, struct command *command,
 	const char *file = "Output file pathname.";
 	int fd;
 	int ret;
+	__u64 capabilities = 0;
 	struct config {
 		char *file;
 	};
@@ -1834,9 +1921,17 @@ static int wdc_get_crash_dump(int argc, char **argv, struct command *command,
 
 	if (!wdc_check_device(fd))
 		return -1;
-	ret = wdc_crash_dump(fd, cfg.file, WDC_NVME_CRASH_DUMP_TYPE);
-	if (ret != 0) {
-		fprintf(stderr, "ERROR : WDC : failed to read crash dump\n");
+
+	capabilities = wdc_get_drive_capabilities(fd);
+
+	if ((capabilities & WDC_DRIVE_CAP_CRASH_DUMP) == 0) {
+		fprintf(stderr, "ERROR : WDC: unsupported device for this command\n");
+		ret = -1;
+	} else {
+		ret = wdc_crash_dump(fd, cfg.file, WDC_NVME_CRASH_DUMP_TYPE);
+		if (ret != 0) {
+			fprintf(stderr, "ERROR : WDC : failed to read crash dump\n");
+		}
 	}
 	return ret;
 }
@@ -1848,6 +1943,7 @@ static int wdc_get_pfail_dump(int argc, char **argv, struct command *command,
 	char *file = "Output file pathname.";
 	int fd;
 	int ret;
+	__u64 capabilities = 0;
 	struct config {
 		char *file;
 	};
@@ -1867,9 +1963,16 @@ static int wdc_get_pfail_dump(int argc, char **argv, struct command *command,
 
 	if (!wdc_check_device(fd))
 		return -1;
-	ret = wdc_crash_dump(fd, cfg.file, WDC_NVME_PFAIL_DUMP_TYPE);
-	if (ret != 0) {
-		fprintf(stderr, "ERROR : WDC : failed to read pfail crash dump\n");
+	capabilities = wdc_get_drive_capabilities(fd);
+
+	if ((capabilities & WDC_DRIVE_CAP_PFAIL_DUMP) == 0) {
+		fprintf(stderr, "ERROR : WDC: unsupported device for this command\n");
+		ret = -1;
+	} else {
+		ret = wdc_crash_dump(fd, cfg.file, WDC_NVME_PFAIL_DUMP_TYPE);
+		if (ret != 0) {
+			fprintf(stderr, "ERROR : WDC : failed to read pfail crash dump\n");
+		}
 	}
 	return ret;
 }
@@ -2162,7 +2265,7 @@ static void wdc_print_ca_log_normal(struct wdc_ssd_ca_perf_stats *perf)
 	printf("  SSD End to End Corrected Correction Count      %20"PRIu32"\n",
 			(uint32_t)le32_to_cpu(perf->ssd_correct_count));
 	printf("  System Data Percent Used                       %20"PRIu32"%%\n",
-			(uint32_t)le32_to_cpu(perf->data_percent_used));
+			perf->data_percent_used);
 	printf("  User Data Erase Counts Max                     %20"PRIu32"\n",
 			(uint32_t)le32_to_cpu(perf->data_erase_max));
 	printf("  User Data Erase Counts Min                     %20"PRIu32"\n",
@@ -2188,12 +2291,16 @@ static void wdc_print_ca_log_normal(struct wdc_ssd_ca_perf_stats *perf)
 	printf("  System Area Erase Fail Count (Raw)             %20"PRIu64"\n",
 			converted >> 16);
 
-	printf("  Thermal Throttling Status                      %20"PRIu16"\n",
-			(uint16_t)le16_to_cpu(perf->thermal_throttle_status));
-	printf("  Thermal Throttling Count                       %20"PRIu16"\n",
-			(uint16_t)le16_to_cpu(perf->thermal_throttle_count));
+	printf("  Thermal Throttling Status                      %20"PRIu8"\n",
+			perf->thermal_throttle_status);
+	printf("  Thermal Throttling Count                       %20"PRIu8"\n",
+			perf->thermal_throttle_count);
 	printf("  PCIe Correctable Error Count                   %20"PRIu64"\n",
 			(uint64_t)le64_to_cpu(perf->pcie_corr_error));
+	printf("  Incomplete Shutdown Count                      %20"PRIu32"\n",
+			(uint32_t)le32_to_cpu(perf->incomplete_shutdown_count));
+	printf("  Percent Free Blocks                            %20"PRIu32"%%\n",
+			perf->percent_free_blocks);
 }
 
 static void wdc_print_ca_log_json(struct wdc_ssd_ca_perf_stats *perf)
@@ -2220,7 +2327,7 @@ static void wdc_print_ca_log_json(struct wdc_ssd_ca_perf_stats *perf)
 	json_object_add_value_int(root, "SSD End to End Corrected Correction Count",
 			le32_to_cpu(perf->ssd_correct_count));
 	json_object_add_value_int(root, "System Data Percent Used",
-			le32_to_cpu(perf->data_percent_used));
+			perf->data_percent_used);
 	json_object_add_value_int(root, "User Data Erase Counts Max",
 			le32_to_cpu(perf->data_erase_max));
 	json_object_add_value_int(root, "User Data Erase Counts Min",
@@ -2246,10 +2353,12 @@ static void wdc_print_ca_log_json(struct wdc_ssd_ca_perf_stats *perf)
 			converted >> 16);
 
 	json_object_add_value_int(root, "Thermal Throttling Status",
-			le16_to_cpu(perf->thermal_throttle_status));
+			perf->thermal_throttle_status);
 	json_object_add_value_int(root, "Thermal Throttling Count",
-			le16_to_cpu(perf->thermal_throttle_count));
+			perf->thermal_throttle_count);
 	json_object_add_value_int(root, "PCIe Correctable Error", le64_to_cpu(perf->pcie_corr_error));
+	json_object_add_value_int(root, "Incomplete Shutdown Counte", le32_to_cpu(perf->incomplete_shutdown_count));
+	json_object_add_value_int(root, "Percent Free Blocks", perf->percent_free_blocks);
 	json_print_object(root, NULL);
 	printf("\n");
 	json_free_object(root);
@@ -2258,52 +2367,50 @@ static void wdc_print_ca_log_json(struct wdc_ssd_ca_perf_stats *perf)
 static void wdc_print_d0_log_normal(struct wdc_ssd_d0_smart_log *perf)
 {
 	printf("  D0 Smart Log Page Statistics :- \n");
-	printf("  Lifetime Write Amplification Factor	         %20"PRIu32"\n",
-			(uint32_t)le32_to_cpu(perf->lifetime_wrt_amp_factor));
-	printf("  Trailing Hour Write Amplification Factor  	 %20"PRIu32"\n",
-			(uint32_t)le32_to_cpu(perf->trailing_hr_wrt_amp_factor));
-	printf("  Percentage of P/E Cycles Remaining             %20"PRIu32"%%\n",
-			(uint32_t)le32_to_cpu(perf->percentage_pe_cycles_remaining));
-	printf("  Lifetime Link Rate Downgrade Count	         %20"PRIu32"\n",
-			(uint32_t)le32_to_cpu(perf->lifetime_link_rate_downgrade_count));
-	printf("  Lifetime Block Erase Fail Count		 %20"PRIu32"\n",
-			(uint32_t)le32_to_cpu(perf->lifetime_block_erase_fail_count));
-	printf("  Lifetime Program Fail Count	     	         %20"PRIu32"\n",
-			(uint32_t)le32_to_cpu(perf->lifetime_program_fail_count));
-	printf("  Lifetime User Writes	                         %20"PRIu64"\n",
-			(uint64_t)le64_to_cpu(perf->lifetime_user_writes));
-	printf("  Lifetime NAND Writes	                         %20"PRIu64"\n",
-			(uint64_t)le64_to_cpu(perf->lifetime_nand_writes));
-	printf("  Lifetime User Reads	                         %20"PRIu64"\n",
-			(uint64_t)le64_to_cpu(perf->lifetime_user_reads));
-	printf("  Lifetime Retired Block Count	                 %20"PRIu32"\n",
-			(uint32_t)le32_to_cpu(perf->lifetime_retired_block_count));
-	printf("  Lifetime Read Disturb Reallocation Events	 %20"PRIu32"\n",
-			(uint32_t)le32_to_cpu(perf->lifetime_read_disturb_realloc_events));
-	printf("  Lifetime Die Failure Count	                 %20"PRIu32"\n",
-			(uint32_t)le32_to_cpu(perf->lifetime_die_failure_count));
-	printf("  Current Temperature 	                         %20"PRIu32"\n",
-			(uint32_t)le32_to_cpu(perf->current_temp));
-	printf("  Max Recorded Temperature			 %20"PRIu32"\n",
-			(uint32_t)le32_to_cpu(perf->max_recorded_temp));
-	printf("  Lifetime Thermal Throttle Activations	         %20"PRIu32"\n",
-			(uint32_t)le32_to_cpu(perf->lifetime_thermal_throttle_act));
-	printf("  Capacitor Health			 	 %20"PRIu32"\n",
-			(uint32_t)le32_to_cpu(perf->capacitor_health));
-	printf("  Reserve Erase Block Count	                 %20"PRIu32"\n",
-			(uint32_t)le32_to_cpu(perf->reserve_erase_block_count));
-	printf("  Lifetime UECC Count	                         %20"PRIu32"\n",
-			(uint32_t)le32_to_cpu(perf->lifetime_uecc_count));
 	printf("  Lifetime Reallocated Erase Block Count	 %20"PRIu32"\n",
 			(uint32_t)le32_to_cpu(perf->lifetime_realloc_erase_block_count));
 	printf("  Lifetime Power on Hours			 %20"PRIu32"\n",
 			(uint32_t)le32_to_cpu(perf->lifetime_power_on_hours));
-	printf("  Power Loss Counters		         	 %20"PRIu32"\n",
-			(uint32_t)le32_to_cpu(perf->power_loss_counters));
+	printf("  Lifetime UECC Count	                         %20"PRIu32"\n",
+			(uint32_t)le32_to_cpu(perf->lifetime_uecc_count));
+	printf("  Lifetime Write Amplification Factor	         %20"PRIu32"\n",
+			(uint32_t)le32_to_cpu(perf->lifetime_wrt_amp_factor));
+	printf("  Trailing Hour Write Amplification Factor  	 %20"PRIu32"\n",
+			(uint32_t)le32_to_cpu(perf->trailing_hr_wrt_amp_factor));
+	printf("  Reserve Erase Block Count	                 %20"PRIu32"\n",
+			(uint32_t)le32_to_cpu(perf->reserve_erase_block_count));
+	printf("  Lifetime Program Fail Count	     	         %20"PRIu32"\n",
+			(uint32_t)le32_to_cpu(perf->lifetime_program_fail_count));
+	printf("  Lifetime Block Erase Fail Count		 %20"PRIu32"\n",
+			(uint32_t)le32_to_cpu(perf->lifetime_block_erase_fail_count));
+	printf("  Lifetime Die Failure Count	                 %20"PRIu32"\n",
+			(uint32_t)le32_to_cpu(perf->lifetime_die_failure_count));
+	printf("  Lifetime Link Rate Downgrade Count	         %20"PRIu32"\n",
+			(uint32_t)le32_to_cpu(perf->lifetime_link_rate_downgrade_count));
 	printf("  Lifetime Clean Shutdown Count on Power Loss	 %20"PRIu32"\n",
 			(uint32_t)le32_to_cpu(perf->lifetime_clean_shutdown_count));
 	printf("  Lifetime Unclean Shutdowns on Power Loss	 %20"PRIu32"\n",
 			(uint32_t)le32_to_cpu(perf->lifetime_unclean_shutdown_count));
+	printf("  Current Temperature 	                         %20"PRIu32"\n",
+			(uint32_t)le32_to_cpu(perf->current_temp));
+	printf("  Max Recorded Temperature			 %20"PRIu32"\n",
+			(uint32_t)le32_to_cpu(perf->max_recorded_temp));
+	printf("  Lifetime Retired Block Count	                 %20"PRIu32"\n",
+			(uint32_t)le32_to_cpu(perf->lifetime_retired_block_count));
+	printf("  Lifetime Read Disturb Reallocation Events	 %20"PRIu32"\n",
+			(uint32_t)le32_to_cpu(perf->lifetime_read_disturb_realloc_events));
+	printf("  Lifetime NAND Writes	                         %20"PRIu64"\n",
+			(uint64_t)le64_to_cpu(perf->lifetime_nand_writes));
+	printf("  Capacitor Health			 	 %20"PRIu32"%%\n",
+			(uint32_t)le32_to_cpu(perf->capacitor_health));
+	printf("  Lifetime User Writes	                         %20"PRIu64"\n",
+			(uint64_t)le64_to_cpu(perf->lifetime_user_writes));
+	printf("  Lifetime User Reads	                         %20"PRIu64"\n",
+			(uint64_t)le64_to_cpu(perf->lifetime_user_reads));
+	printf("  Lifetime Thermal Throttle Activations	         %20"PRIu32"\n",
+			(uint32_t)le32_to_cpu(perf->lifetime_thermal_throttle_act));
+	printf("  Percentage of P/E Cycles Remaining             %20"PRIu32"%%\n",
+			(uint32_t)le32_to_cpu(perf->percentage_pe_cycles_remaining));
 }
 
 static void wdc_print_d0_log_json(struct wdc_ssd_d0_smart_log *perf)
@@ -2311,52 +2418,50 @@ static void wdc_print_d0_log_json(struct wdc_ssd_d0_smart_log *perf)
 	struct json_object *root;
 
 	root = json_create_object();
-	json_object_add_value_int(root, "Lifetime Write Amplification Factor",
-			le32_to_cpu(perf->lifetime_wrt_amp_factor));
-	json_object_add_value_int(root, "Trailing Hour Write Amplification Factor",
-			le32_to_cpu(perf->trailing_hr_wrt_amp_factor));
-	json_object_add_value_int(root, "Percentage of P/E Cycles Remaining",
-			le32_to_cpu(perf->percentage_pe_cycles_remaining));
-	json_object_add_value_int(root, "Lifetime Link Rate Downgrade Count",
-			le32_to_cpu(perf->lifetime_link_rate_downgrade_count));
-	json_object_add_value_int(root, "Lifetime Block Erase Fail Count",
-			le32_to_cpu(perf->lifetime_block_erase_fail_count));
-	json_object_add_value_int(root, "Lifetime Program Fail Count",
-			le32_to_cpu(perf->lifetime_program_fail_count));
-	json_object_add_value_int(root, "Lifetime User Writes",
-			le64_to_cpu(perf->lifetime_user_writes));
-	json_object_add_value_int(root, "Lifetime NAND Writes",
-			le64_to_cpu(perf->lifetime_nand_writes));
-	json_object_add_value_int(root, "Lifetime User Reads",
-			le64_to_cpu(perf->lifetime_user_reads));
-	json_object_add_value_int(root, "Lifetime Retired Block Count",
-			le32_to_cpu(perf->lifetime_retired_block_count));
-	json_object_add_value_int(root, "Lifetime Read Disturb Reallocation Events",
-			le32_to_cpu(perf->lifetime_read_disturb_realloc_events));
-	json_object_add_value_int(root, "Lifetime Die Failure Count",
-			le32_to_cpu(perf->lifetime_die_failure_count));
-	json_object_add_value_int(root, "Current Temperature",
-			le32_to_cpu(perf->current_temp));
-	json_object_add_value_int(root, "Max Recorded Temperature",
-			le32_to_cpu(perf->max_recorded_temp));
-	json_object_add_value_int(root, "Lifetime Thermal Throttle Activations",
-			le32_to_cpu(perf->lifetime_thermal_throttle_act));
-	json_object_add_value_int(root, "Capacitor Health",
-			le32_to_cpu(perf->capacitor_health));
-	json_object_add_value_int(root, "Reserve Erase Block Count",
-			le32_to_cpu(perf->reserve_erase_block_count));
-	json_object_add_value_int(root, "Lifetime UECC Count",
-			le32_to_cpu(perf->lifetime_uecc_count));
 	json_object_add_value_int(root, "Lifetime Reallocated Erase Block Count",
 			le32_to_cpu(perf->lifetime_realloc_erase_block_count));
 	json_object_add_value_int(root, "Lifetime Power on Hours",
 			le32_to_cpu(perf->lifetime_power_on_hours));
-	json_object_add_value_int(root, "Power Loss Counters",
-			le32_to_cpu(perf->power_loss_counters));
+	json_object_add_value_int(root, "Lifetime UECC Count",
+			le32_to_cpu(perf->lifetime_uecc_count));
+	json_object_add_value_int(root, "Lifetime Write Amplification Factor",
+			le32_to_cpu(perf->lifetime_wrt_amp_factor));
+	json_object_add_value_int(root, "Trailing Hour Write Amplification Factor",
+			le32_to_cpu(perf->trailing_hr_wrt_amp_factor));
+	json_object_add_value_int(root, "Reserve Erase Block Count",
+			le32_to_cpu(perf->reserve_erase_block_count));
+	json_object_add_value_int(root, "Lifetime Program Fail Count",
+			le32_to_cpu(perf->lifetime_program_fail_count));
+	json_object_add_value_int(root, "Lifetime Block Erase Fail Count",
+			le32_to_cpu(perf->lifetime_block_erase_fail_count));
+	json_object_add_value_int(root, "Lifetime Die Failure Count",
+			le32_to_cpu(perf->lifetime_die_failure_count));
+	json_object_add_value_int(root, "Lifetime Link Rate Downgrade Count",
+			le32_to_cpu(perf->lifetime_link_rate_downgrade_count));
 	json_object_add_value_int(root, "Lifetime Clean Shutdown Count on Power Loss",
 			le32_to_cpu(perf->lifetime_clean_shutdown_count));
 	json_object_add_value_int(root, "Lifetime Unclean Shutdowns on Power Loss",
 			le32_to_cpu(perf->lifetime_unclean_shutdown_count));
+	json_object_add_value_int(root, "Current Temperature",
+			le32_to_cpu(perf->current_temp));
+	json_object_add_value_int(root, "Max Recorded Temperature",
+			le32_to_cpu(perf->max_recorded_temp));
+	json_object_add_value_int(root, "Lifetime Retired Block Count",
+			le32_to_cpu(perf->lifetime_retired_block_count));
+	json_object_add_value_int(root, "Lifetime Read Disturb Reallocation Events",
+			le32_to_cpu(perf->lifetime_read_disturb_realloc_events));
+	json_object_add_value_int(root, "Lifetime NAND Writes",
+			le64_to_cpu(perf->lifetime_nand_writes));
+	json_object_add_value_int(root, "Capacitor Health",
+			le32_to_cpu(perf->capacitor_health));
+	json_object_add_value_int(root, "Lifetime User Writes",
+			le64_to_cpu(perf->lifetime_user_writes));
+	json_object_add_value_int(root, "Lifetime User Reads",
+			le64_to_cpu(perf->lifetime_user_reads));
+	json_object_add_value_int(root, "Lifetime Thermal Throttle Activations",
+			le32_to_cpu(perf->lifetime_thermal_throttle_act));
+	json_object_add_value_int(root, "Percentage of P/E Cycles Remaining",
+			le32_to_cpu(perf->percentage_pe_cycles_remaining));
 
 	json_print_object(root, NULL);
 	printf("\n");
@@ -2413,7 +2518,7 @@ static int wdc_get_ca_log_page(int fd, char *format)
 	}
 
 	/* verify the 0xCA log page is supported */
-	if (wdc_nvme_check_supported_log_page(fd, WDC_NVME_GET_DEVICE_INFO_LOG_OPCODE)) {
+	if (wdc_nvme_check_supported_log_page(fd, WDC_NVME_GET_DEVICE_INFO_LOG_OPCODE) == false) {
 		fprintf(stderr, "ERROR : WDC : 0xCA Log Page not supported\n");
 		return -1;
 	}
@@ -2611,6 +2716,7 @@ static int wdc_clear_pcie_correctable_errors(int argc, char **argv, struct comma
 	char *desc = "Clear PCIE Correctable Errors.";
 	int fd;
 	int ret;
+	__u64 capabilities = 0;
 	struct nvme_passthru_cmd admin_cmd;
 	const struct argconfig_commandline_options command_line_options[] = {
 		{ NULL, '\0', NULL, CFG_NONE, NULL, no_argument, desc },
@@ -2620,8 +2726,17 @@ static int wdc_clear_pcie_correctable_errors(int argc, char **argv, struct comma
 	if (fd < 0)
 		return fd;
 
-	if (!wdc_check_device(fd))
-		return -1;
+	if (!wdc_check_device(fd)) {
+		ret = -1;
+		goto out;
+	}
+
+	capabilities = wdc_get_drive_capabilities(fd);
+	if ((capabilities & WDC_DRIVE_CAP_CLEAR_PCIE) == 0) {
+		fprintf(stderr, "ERROR : WDC: unsupported device for this command\n");
+		ret = -1;
+		goto out;
+	}
 
 	memset(&admin_cmd, 0, sizeof (admin_cmd));
 	admin_cmd.opcode = WDC_NVME_CLEAR_PCIE_CORR_OPCODE;
@@ -2630,6 +2745,7 @@ static int wdc_clear_pcie_correctable_errors(int argc, char **argv, struct comma
 
 	ret = nvme_submit_passthru(fd, NVME_IOCTL_ADMIN_CMD, &admin_cmd);
 	fprintf(stderr, "NVMe Status:%s(%x)\n", nvme_status_to_string(ret), ret);
+out:
 	return ret;
 }
 static int wdc_drive_status(int argc, char **argv, struct command *command,
@@ -3582,5 +3698,127 @@ static int wdc_drive_resize(int argc, char **argv,
 	if (!ret)
 		printf("New size: %lu GB\n", cfg.size);
 	fprintf(stderr, "NVMe Status:%s(%x)\n", nvme_status_to_string(ret), ret);
+	return ret;
+}
+
+static void wdc_print_nand_stats_normal(struct wdc_nand_stats *data)
+{
+	printf("  NAND Statistics :- \n");
+	printf("  NAND Writes TLC (Bytes)		         %.0Lf\n",
+			int128_to_double(data->nand_write_tlc));
+	printf("  NAND Writes SLC (Bytes)		         %.0Lf\n",
+			int128_to_double(data->nand_write_slc));
+	printf("  NAND Program Failures			  	 %"PRIu32"\n",
+			(uint32_t)le32_to_cpu(data->nand_prog_failure));
+	printf("  NAND Erase Failures				 %"PRIu32"\n",
+			(uint32_t)le32_to_cpu(data->nand_erase_failure));
+	printf("  Bad Block Count			         %"PRIu32"\n",
+			(uint32_t)le32_to_cpu(data->bad_block_count));
+	printf("  NAND XOR/RAID Recovery Trigger Events		 %"PRIu64"\n",
+			(uint64_t)le64_to_cpu(data->nand_rec_trigger_event));
+}
+
+static void wdc_print_nand_stats_json(struct wdc_nand_stats *data)
+{
+	struct json_object *root;
+
+	root = json_create_object();
+	json_object_add_value_float(root, "NAND Writes TLC (Bytes)",
+			int128_to_double(data->nand_write_tlc));
+	json_object_add_value_float(root, "NAND Writes SLC (Bytes)",
+			int128_to_double(data->nand_write_slc));
+	json_object_add_value_uint(root, "NAND Program Failures",
+			le32_to_cpu(data->nand_prog_failure));
+	json_object_add_value_uint(root, "NAND Erase Failures",
+			le32_to_cpu(data->nand_erase_failure));
+	json_object_add_value_uint(root, "Bad Block Count",
+			le32_to_cpu(data->bad_block_count));
+	json_object_add_value_uint(root, "NAND XOR/RAID Recovery Trigger Events",
+			le64_to_cpu(data->nand_rec_trigger_event));
+
+	json_print_object(root, NULL);
+	printf("\n");
+	json_free_object(root);
+}
+
+static int wdc_do_vs_nand_stats(int fd, char *format)
+{
+	int ret;
+	int fmt = -1;
+	uint8_t *output = NULL;
+	struct wdc_nand_stats *nand_stats;
+
+	if ((output = (uint8_t*)calloc(WDC_NVME_NAND_STATS_SIZE, sizeof(uint8_t))) == NULL) {
+		fprintf(stderr, "ERROR : WDC : calloc : %s\n", strerror(errno));
+		ret = -1;
+		goto out;
+	}
+
+	ret = nvme_get_log(fd, 0xFFFFFFFF, WDC_NVME_NAND_STATS_LOG_ID,
+			   false, WDC_NVME_NAND_STATS_SIZE, (void*)output);
+	if (ret) {
+		fprintf(stderr, "ERROR : WDC : %s : Failed to retreive NAND stats\n", __func__);
+		goto out;
+	} else {
+		fmt = validate_output_format(format);
+		if (fmt < 0) {
+			fprintf(stderr, "ERROR : WDC : invalid output format\n");
+			ret = fmt;
+			goto out;
+		}
+
+		/* parse the data */
+		nand_stats = (struct wdc_nand_stats *)(output);
+		switch (fmt) {
+		case NORMAL:
+			wdc_print_nand_stats_normal(nand_stats);
+			break;
+		case JSON:
+			wdc_print_nand_stats_json(nand_stats);
+			break;
+		}
+	}
+
+out:
+	free(output);
+	return ret;
+}
+
+static int wdc_vs_nand_stats(int argc, char **argv, struct command *command,
+		struct plugin *plugin)
+{
+	const char *desc = "Retrieve NAND statistics.";
+	int fd;
+	int ret = 0;
+	__u64 capabilities = 0;
+
+	struct config {
+		char *output_format;
+	};
+
+	struct config cfg = {
+		.output_format = "normal",
+	};
+
+	const struct argconfig_commandline_options command_line_options[] = {
+		{"output-format", 'o', "FMT", CFG_STRING, &cfg.output_format, required_argument, "Output Format: normal|json" },
+		{ NULL, '\0', NULL, CFG_NONE, NULL, no_argument, desc },
+	};
+
+	fd = parse_and_open(argc, argv, desc, command_line_options, NULL, 0);
+	if (fd < 0)
+		return fd;
+
+	capabilities = wdc_get_drive_capabilities(fd);
+
+	if ((capabilities & WDC_DRIVE_CAP_NAND_STATS) == 0) {
+		fprintf(stderr, "ERROR : WDC: unsupported device for this command\n");
+		ret = -1;
+	} else {
+		ret = wdc_do_vs_nand_stats(fd, cfg.output_format);
+		if (ret)
+			fprintf(stderr, "ERROR : WDC : Failure reading NAND statistics, ret = %d\n", ret);
+	}
+
 	return ret;
 }

@@ -45,6 +45,7 @@
 #include <sys/stat.h>
 #include <sys/time.h>
 
+#include "common.h"
 #include "nvme-print.h"
 #include "nvme-ioctl.h"
 #include "nvme-lightnvm.h"
@@ -53,10 +54,6 @@
 #include "argconfig.h"
 
 #include "fabrics.h"
-
-#define array_len(x) ((size_t)(sizeof(x) / sizeof(x[0])))
-#define min(x, y) ((x) > (y) ? (y) : (x))
-#define max(x, y) ((x) > (y) ? (x) : (y))
 
 static struct stat nvme_stat;
 const char *devicename;
@@ -344,14 +341,6 @@ static int get_telemetry_log(int argc, char **argv, struct command *cmd, struct 
 		goto close_fd;
 	}
 
-	output = open(cfg.file_name, O_WRONLY | O_CREAT | O_TRUNC, 0666);
-	if (output < 0) {
-		fprintf(stderr, "Failed to open output file %s: %s!\n",
-				cfg.file_name, strerror(errno));
-		err = output;
-		goto close_fd;
-	}
-
 	cfg.host_gen = !!cfg.host_gen;
 	hdr = malloc(bs);
 	page_log = malloc(bs);
@@ -361,21 +350,28 @@ static int get_telemetry_log(int argc, char **argv, struct command *cmd, struct 
 		err = ENOMEM;
 		goto free_mem;
 	}
-
 	memset(hdr, 0, bs);
+
+	output = open(cfg.file_name, O_WRONLY | O_CREAT | O_TRUNC, 0666);
+	if (output < 0) {
+		fprintf(stderr, "Failed to open output file %s: %s!\n",
+				cfg.file_name, strerror(errno));
+		err = output;
+		goto free_mem;
+	}
+
 	err = nvme_get_telemetry_log(fd, hdr, cfg.host_gen, cfg.ctrl_init, bs, 0);
 	if (err) {
 		fprintf(stderr, "NVMe Status:%s(%x)\n",
 			nvme_status_to_string(err), err);
 		fprintf(stderr, "Failed to acquire telemetry header %d!\n", err);
-		close(output);
-		goto free_mem;
+		goto close_output;
 	}
 
 	err = write(output, (void *) hdr, bs);
 	if (err != bs) {
 		fprintf(stderr, "Failed to flush all data to file!");
-		goto free_mem;
+		goto close_output;
 	}
 
 	switch (cfg.data_area) {
@@ -391,7 +387,7 @@ static int get_telemetry_log(int argc, char **argv, struct command *cmd, struct 
 	default:
 		fprintf(stderr, "Invalid data area requested");
 		err = EINVAL;
-		goto free_mem;
+		goto close_output;
 	}
 
 	/*
@@ -414,6 +410,9 @@ static int get_telemetry_log(int argc, char **argv, struct command *cmd, struct 
 		}
 		offset += bs;
 	}
+
+ close_output:
+	close(output);
  free_mem:
 	free(hdr);
 	free(page_log);
@@ -606,7 +605,7 @@ static int get_error_log(int argc, char **argv, struct command *cmd, struct plug
 		err = nvme_error_log(fd, cfg.log_entries, err_log);
 		if (!err) {
 			if (fmt == BINARY)
-				d_raw((unsigned char *)err_log, sizeof(err_log));
+				d_raw((unsigned char *)err_log, cfg.log_entries * sizeof(*err_log));
 			else if (fmt == JSON)
 				json_error_log(err_log, cfg.log_entries, devicename);
 			else
@@ -1334,10 +1333,9 @@ static char *get_nvme_subsnqn(char *path)
 				strerror(errno));
 		free(subsysnqn);
 		subsysnqn = NULL;
-	}
-
-	if (subsysnqn[strlen(subsysnqn) - 1] == '\n')
+	} else if (subsysnqn[strlen(subsysnqn) - 1] == '\n') {
 		subsysnqn[strlen(subsysnqn) - 1] = '\0';
+	}
 
 close_fd:
 	close(fd);
@@ -2206,21 +2204,20 @@ static int get_ns_id(int argc, char **argv, struct command *cmd, struct plugin *
 static int virtual_mgmt(int argc, char **argv, struct command *cmd, struct plugin *plugin)
 {
 	const char *desc  = "The Virtualization Management command is supported by primary controllers "\
-		"that support the Virtualization Enhancements capability.This command is used for "\
-		"1. Modifying Flexible Resource allocation for the primary controller  "\
-		"2. Assigning Flexible Resources for secondary controllers; and "\
-		"3. Setting the Online and Offline state for secondary controllers";
-	const char *cntlid = "This field indicates the controller for which controller resources "\
-		"are to be modified.";
-	const char *rt = "Indicate the Resource Type (RT) : \n"\
-		"1. 0 - VQ Resources.\n"\
-		"2. 1 - VI Resources.\n\n";
-	const char *act = "Indicate the Action (ACT) : \n"\
-		"1. 1 - Primary Controller Flexible Allocation\n"\
-		"2. 7 - Secondary Controller Offline\n"\
-		"3. 8 - Secondary Controller Assign\n"\
-		"4. 9 - Secondary Controller Online";
-	const char *nr = "Indicate the Number of Controller Resources (NR)";
+		"that support the Virtualization Enhancements capability. This command is used for:\n"\
+		"  1. Modifying Flexible Resource allocation for the primary controller\n"\
+		"  2. Assigning Flexible Resources for secondary controllers\n"\
+		"  3. Setting the Online and Offline state for secondary controllers";
+	const char *cntlid = "Controller Identifier(CNTLID)";
+	const char *rt = "Resource Type(RT): [0,1]\n"\
+		"0h: VQ Resources\n"\
+		"1h: VI Resources";
+	const char *act = "Action(ACT): [1,7,8,9]\n"\
+		"1h: Primary Flexible\n"\
+		"7h: Secondary Offline\n"\
+		"8h: Secondary Assign\n"\
+		"9h: Secondary Online";
+	const char *nr = "Number of Controller Resources(NR)";
 	int fd, err;
 	__u32 result;
 
@@ -2241,10 +2238,10 @@ static int virtual_mgmt(int argc, char **argv, struct command *cmd, struct plugi
 	};
 
 	const struct argconfig_commandline_options command_line_options[] = {
-		{"Controller-identifier",	   'c', "NUM", CFG_POSITIVE, &cfg.cntlid, required_argument, cntlid},
-		{"Resource-type",		   'r', "NUM", CFG_POSITIVE, &cfg.rt,     required_argument, rt},
-		{"Action",			   'a', "NUM", CFG_POSITIVE, &cfg.act,    required_argument, act},
-		{"Number-of-controller-resources", 'n', "NUM", CFG_POSITIVE, &cfg.cdw11,  required_argument, nr},
+		{"cntlid",	'c', "NUM", CFG_POSITIVE, &cfg.cntlid, required_argument, cntlid},
+		{"rt",		'r', "NUM", CFG_POSITIVE, &cfg.rt,     required_argument, rt},
+		{"act",		'a', "NUM", CFG_POSITIVE, &cfg.act,    required_argument, act},
+		{"nr",		'n', "NUM", CFG_POSITIVE, &cfg.cdw11,  required_argument, nr},
 		{NULL}
 	};
 
@@ -2880,27 +2877,46 @@ static int show_registers(int argc, char **argv, struct command *cmd, struct plu
 {
 	const char *desc = "Reads and shows the defined NVMe controller registers "\
 					"in binary or human-readable format";
-	const char *human_readable = "show info in readable format";
+	const char *human_readable = "show info in readable format in case of "\
+					"output_format == normal";
 	void *bar;
-	int fd, err;
+	int fd, err, fmt;
 	bool fabrics = true;
+	const int reg_size = 0x50;  /* 00h to 4Fh */
 
 	struct config {
 		int human_readable;
+		char *output_format;
 	};
 
 	struct config cfg = {
 		.human_readable = 0,
+		.output_format = "normal",
 	};
 
 	const struct argconfig_commandline_options command_line_options[] = {
 		{"human-readable", 'H', "", CFG_NONE, &cfg.human_readable, no_argument, human_readable},
+		{"output-format", 'o', "FMT", CFG_STRING, &cfg.output_format, required_argument, output_format},
 		{NULL}
 	};
 
 	fd = parse_and_open(argc, argv, desc, command_line_options, &cfg, sizeof(cfg));
 	if (fd < 0)
 		return fd;
+
+	fmt = validate_output_format(cfg.output_format);
+	if (fmt < 0) {
+		fprintf(stderr, "Invalid argument --output-format=%s\n",
+				cfg.output_format);
+		err = -fmt;
+		goto close_fd;
+	}
+
+	if (cfg.human_readable && fmt != NORMAL) {
+		fprintf(stderr, "Only --output-format=normal supports -H\n");
+		err = EINVAL;
+		goto close_fd;
+	}
 
 	err = nvme_get_properties(fd, &bar);
 	if (err) {
@@ -2913,7 +2929,13 @@ static int show_registers(int argc, char **argv, struct command *cmd, struct plu
 		err = ENODEV;
 		goto close_fd;
 	}
-	show_ctrl_registers(bar, cfg.human_readable ? HUMAN : 0, fabrics);
+
+	if (fmt == BINARY)
+		d_raw((unsigned char *) bar, reg_size);
+	else if (fmt == JSON)
+		json_ctrl_registers(bar);
+	else
+		show_ctrl_registers(bar, cfg.human_readable ? HUMAN : 0, fabrics);
 
 	if (fabrics)
 		free(bar);
@@ -3141,32 +3163,9 @@ static int format(int argc, char **argv, struct command *cmd, struct plugin *plu
 					"Please correct block size, or specify LBAF directly\n");
 				return EINVAL;
 			}
-		}
+		} else  if (cfg.lbaf == 0xff)
+			cfg.lbaf = prev_lbaf;
 	}
-	if (cfg.bs) {
-		__u64 bs = cfg.bs;
-		bs = bs >> 1;
-		while (bs) {
-			++lbads;
-			bs = bs >> 1;
-		}
-		for (i=0; i<16; ++i) {
-			if (ns.lbaf[i].ds == lbads && ns.lbaf[i].ms == 0) {
-				cfg.lbaf = i;
-				break;
-			}
-		}
-			if (cfg.lbaf == 0xff) {
-				fprintf(stderr,
-					"LBAF corresponding to block size %"PRIu64" (LBAF %u) not found\n",
-					(uint64_t)cfg.bs, lbads);
-				fprintf(stderr,
-					"Please correct block size, or specify LBAF directly\n");
-				return EINVAL;
-			}
-	}
-	if (cfg.lbaf == 0xff)
-		cfg.lbaf = prev_lbaf;
 
 	/* ses & pi checks set to 7 for forward-compatibility */
 	if (cfg.ses > 7) {
@@ -3791,9 +3790,9 @@ static int dsm(int argc, char **argv, struct command *cmd, struct plugin *plugin
 	if (fd < 0)
 		return fd;
 
-	nc = argconfig_parse_comma_sep_array(cfg.ctx_attrs, ctx_attrs, array_len(ctx_attrs));
-	nb = argconfig_parse_comma_sep_array(cfg.blocks, nlbs, array_len(nlbs));
-	ns = argconfig_parse_comma_sep_array_long(cfg.slbas, slbas, array_len(slbas));
+	nc = argconfig_parse_comma_sep_array(cfg.ctx_attrs, ctx_attrs, ARRAY_SIZE(ctx_attrs));
+	nb = argconfig_parse_comma_sep_array(cfg.blocks, nlbs, ARRAY_SIZE(nlbs));
+	ns = argconfig_parse_comma_sep_array_long(cfg.slbas, slbas, ARRAY_SIZE(slbas));
 	nr = max(nc, max(nb, ns));
 	if (!nr || nr > 256) {
 		fprintf(stderr, "No range definition provided\n");
@@ -4413,7 +4412,7 @@ static int submit_io(int opcode, char *command, const char *desc,
 	if (err < 0)
 		perror("submit-io");
 	else if (err)
-		printf("%s:%s(%04x)\n", command, nvme_status_to_string(err), err);
+		fprintf(stderr, "%s:%s(%04x)\n", command, nvme_status_to_string(err), err);
 	else {
 		if (!(opcode & 1) && write(dfd, (void *)buffer, cfg.data_size) < 0) {
 			fprintf(stderr, "write: %s: failed to write buffer to output file\n",

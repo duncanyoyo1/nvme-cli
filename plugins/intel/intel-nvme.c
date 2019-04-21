@@ -7,6 +7,7 @@
 
 #include "linux/nvme_ioctl.h"
 
+#include "common.h"
 #include "nvme.h"
 #include "nvme-print.h"
 #include "nvme-ioctl.h"
@@ -504,9 +505,6 @@ struct intel_cd_log {
     }u;
 };
 
-#define max(x,y) (x) > (y) ? (x) : (y)
-#define min(x,y) (x) > (y) ? (y) : (x)
-
 static void print_intel_nlog(struct intel_vu_nlog *intel_nlog)
 {
 	printf("Version Major %u\n"
@@ -688,8 +686,11 @@ static int get_internal_log(int argc, char **argv, struct command *command, stru
 	};
 
 	fd = parse_and_open(argc, argv, desc, command_line_options, &cfg, sizeof(cfg));
-	if (fd < 0)
+	if (fd < 0) {
+		free(intel);
 		return fd;
+	}
+
 	if (cfg.log > 2 || cfg.core > 4 || cfg.lnum > 255) {
 		free(intel);
 		return EINVAL;

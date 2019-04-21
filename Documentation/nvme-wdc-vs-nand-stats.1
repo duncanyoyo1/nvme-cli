@@ -1,5 +1,5 @@
 '\" t
-.\"     Title: nvme-netapp-smdevices
+.\"     Title: nvme-wdc-vs-nand-stats
 .\"    Author: [FIXME: author] [see http://www.docbook.org/tdg5/en/html/author]
 .\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
 .\"      Date: 04/08/2019
@@ -7,7 +7,7 @@
 .\"    Source: NVMe
 .\"  Language: English
 .\"
-.TH "NVME\-NETAPP\-SMDEVI" "1" "04/08/2019" "NVMe" "NVMe Manual"
+.TH "NVME\-WDC\-VS\-NAND\" "1" "04/08/2019" "NVMe" "NVMe Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -28,24 +28,28 @@
 .\" * MAIN CONTENT STARTS HERE *
 .\" -----------------------------------------------------------------
 .SH "NAME"
-nvme-netapp-smdevices \- Display information for each NVMe path to an E\-Series volume
+nvme-wdc-vs-nand-stats \- Send NVMe WDC vs\-nand\-stats Vendor Unique Command, return result
 .SH "SYNOPSIS"
 .sp
 .nf
-\fInvme netapp smdevices\fR [\-o <fmt> | \-\-output\-format=<fmt>]
+\fInvme wdc vs\-nand\-stats\fR <device> [\-\-output\-format=<normal|json> \-o <normal|json>]
 .fi
 .SH "DESCRIPTION"
 .sp
-Display vendor\-specific information for each NVMe path to an E\-Series namespace currently connected to the host\&. The E\-Series paths are identified from the NVMe nodes in /dev by sending an Identify Controller\&.
+For the NVMe device given, send a Vendor Unique WDC vs\-nand\-stats command and output the NAND statistics\&. The \-\-output\-format option will format the output as specified\&.
+.sp
+The <device> parameter is mandatory and may be either the NVMe character device (ex: /dev/nvme0)\&.
+.sp
+This will only work on WDC devices supporting this feature\&. Results for any other device are undefined\&.
+.sp
+On success it returns the NAND statistics, error code otherwise\&.
 .SH "OPTIONS"
 .PP
-\-o <fmt>, \-\-output\-format=<fmt>
+\-o <format>, \-\-output\-format=<format>
 .RS 4
 Set the reporting format to
-\fInormal\fR
-(default),
-\fIcolumn\fR, or
-\fIjson\fR\&. Only one output format can be used at a time\&.
+\fInormal\fR, or
+\fIjson\fR\&. Only one output format can be used at a time\&. Default is normal\&.
 .RE
 .SH "EXAMPLES"
 .sp
@@ -57,13 +61,13 @@ Set the reporting format to
 .sp -1
 .IP \(bu 2.3
 .\}
-Display information, in a column\-based format, for each path to an E\-Series namespace\&.
+Has the program issue WDC vs\-nand\-stats Vendor Unique Command :
 .sp
 .if n \{\
 .RS 4
 .\}
 .nf
-# nvme netapp smdevices \-o column
+# nvme wdc vs\-nand\-stats /dev/nvme0
 .fi
 .if n \{\
 .RE
@@ -71,4 +75,4 @@ Display information, in a column\-based format, for each path to an E\-Series na
 .RE
 .SH "NVME"
 .sp
-Part of the nvme\-user suite
+Part of the nvme\-user suite\&.

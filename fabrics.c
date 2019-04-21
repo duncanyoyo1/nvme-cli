@@ -98,7 +98,7 @@ static const char *arg_str(const char * const *strings,
 
 static const char * const trtypes[] = {
 	[NVMF_TRTYPE_RDMA]	= "rdma",
-	[NVMF_TRTYPE_FC]	= "fibre-channel",
+	[NVMF_TRTYPE_FC]	= "fc",
 	[NVMF_TRTYPE_TCP]	= "tcp",
 	[NVMF_TRTYPE_LOOP]	= "loop",
 };
@@ -251,14 +251,14 @@ static int remove_ctrl_by_path(char *sysfs_path)
 
 	fd = open(sysfs_path, O_WRONLY);
 	if (fd < 0) {
-		ret = errno;
+		ret = -errno;
 		fprintf(stderr, "Failed to open %s: %s\n", sysfs_path,
 				strerror(errno));
 		goto out;
 	}
 
 	if (write(fd, "1", 1) != 1) {
-		ret = errno;
+		ret = -errno;
 		goto out_close;
 	}
 
@@ -276,7 +276,7 @@ static int remove_ctrl(int instance)
 
 	if (asprintf(&sysfs_path, "/sys/class/nvme/nvme%d/delete_controller",
 			instance) < 0) {
-		ret = errno;
+		ret = -errno;
 		goto out;
 	}
 
@@ -833,9 +833,12 @@ static int connect_ctrls(struct nvmf_disc_rsp_page_hdr *log, int numrec)
 			continue;
 		}
 
-		/* otherwise error */
-		ret = -instance;
-		break;
+		/*
+		 * don't error out. The Discovery Log may contain
+		 * devices that aren't necessarily connectable via
+		 * the system/host transport port. Let those items
+		 * fail and continue on to the next log element.
+		 */
 	}
 
 	return ret;
@@ -845,17 +848,19 @@ static int do_discover(char *argstr, bool connect)
 {
 	struct nvmf_disc_rsp_page_hdr *log = NULL;
 	char *dev_name;
-	int instance, numrec = 0, ret;
+	int instance, numrec = 0, ret, err;
 
 	instance = add_ctrl(argstr);
 	if (instance < 0)
 		return instance;
 
 	if (asprintf(&dev_name, "/dev/nvme%d", instance) < 0)
-		return errno;
+		return -errno;
 	ret = nvmf_get_log_page_discovery(dev_name, &log, &numrec);
 	free(dev_name);
-	remove_ctrl(instance);
+	err = remove_ctrl(instance);
+	if (err)
+		return err;
 
 	switch (ret) {
 	case DISC_OK:
