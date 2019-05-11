@@ -87,6 +87,23 @@ struct nvme_controller_list {
 	__le16 identifier[];
 };
 
+struct nvme_secondary_controller_entry {
+	__le16 scid;	/* Secondary Controller Identifier */
+	__le16 pcid;	/* Primary Controller Identifier */
+	__u8   scs;	/* Secondary Controller State */
+	__u8   rsvd5[3];
+	__le16 vfn;	/* Virtual Function Number */
+	__le16 nvq;	/* Number of VQ Flexible Resources Assigned */
+	__le16 nvi;	/* Number of VI Flexible Resources Assigned */
+	__u8   rsvd14[18];
+};
+
+struct nvme_secondary_controllers_list {
+	__u8   num;
+	__u8   rsvd[31];
+	struct nvme_secondary_controller_entry sc_entry[127];
+};
+
 struct nvme_bar_cap {
 	__u16	mqes;
 	__u8	ams_cqr;
@@ -160,4 +177,28 @@ int	validate_output_format(char *format);
 struct subsys_list_item *get_subsys_list(int *subcnt, char *subsysnqn, __u32 nsid);
 void free_subsys_list(struct subsys_list_item *slist, int n);
 char *nvme_char_from_block(char *block);
+
+/*
+ * is_64bit_reg - It checks whether given offset of the controller register is
+ *                64bit or not.
+ * @offset: offset of controller register field in bytes
+ *
+ * It gives true if given offset is 64bit register, otherwise it returns false.
+ *
+ * Notes:  This function does not care about transport so that the offset is
+ * not going to be checked inside of this function for the unsupported fields
+ * in a specific transport.  For example, BPMBL(Boot Partition Memory Buffer
+ * Location) register is not supported by fabrics, but it can be chcked here.
+ */
+static inline bool is_64bit_reg(__u32 offset)
+{
+	if (offset == NVME_REG_CAP ||
+			offset == NVME_REG_ASQ ||
+			offset == NVME_REG_ACQ ||
+			offset == NVME_REG_BPMBL)
+		return true;
+
+	return false;
+}
+
 #endif /* _NVME_H */

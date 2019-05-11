@@ -370,6 +370,11 @@ int nvme_identify_ctrl_list(int fd, __u32 nsid, __u16 cntid, void *data)
 	return nvme_identify(fd, nsid, (cntid << 16) | cns, data);
 }
 
+int nvme_identify_secondary_ctrl_list(int fd, __u32 nsid, __u16 cntid, void *data)
+{
+	return nvme_identify(fd, nsid, (cntid << 16) | NVME_ID_CNS_SCNDRY_CTRL_LIST, data);
+}
+
 int nvme_identify_ns_descs(int fd, __u32 nsid, void *data)
 {
 
@@ -572,29 +577,19 @@ static int nvme_property(int fd, __u8 fctype, __le32 off, __le64 *value, __u8 at
 	return err;
 }
 
-static int get_property_helper(int fd, int offset, void *value, int *advance)
+int nvme_get_property(int fd, int offset, uint64_t *value)
 {
 	__le64 value64;
 	int err = -EINVAL;
-
-	switch (offset) {
-	case NVME_REG_CAP:
-	case NVME_REG_ASQ:
-	case NVME_REG_ACQ:
-		*advance = 8;
-		break;
-	default:
-		*advance = 4;
-	}
 
 	if (!value)
 		return err;
 
 	err = nvme_property(fd, nvme_fabrics_type_property_get,
-			cpu_to_le32(offset), &value64, (*advance == 8));
+			cpu_to_le32(offset), &value64, is_64bit_reg(offset));
 
 	if (!err) {
-		if (*advance == 8)
+		if (is_64bit_reg(offset))
 			*((uint64_t *)value) = le64_to_cpu(value64);
 		else
 			*((uint32_t *)value) = le32_to_cpu(value64);
@@ -603,16 +598,10 @@ static int get_property_helper(int fd, int offset, void *value, int *advance)
 	return err;
 }
 
-int nvme_get_property(int fd, int offset, uint64_t *value)
-{
-	int advance;
-	return get_property_helper(fd, offset, value, &advance);
-}
-
 int nvme_get_properties(int fd, void **pbar)
 {
-	int offset, advance;
-	int err, ret = -EINVAL;
+	int offset;
+	int err;
 	int size = getpagesize();
 
 	*pbar = malloc(size);
@@ -622,15 +611,17 @@ int nvme_get_properties(int fd, void **pbar)
 	}
 
 	memset(*pbar, 0xff, size);
-	for (offset = NVME_REG_CAP; offset <= NVME_REG_CMBSZ; offset += advance) {
-		err = get_property_helper(fd, offset, *pbar + offset, &advance);
-		if (!err)
-			ret = 0;
-		else
+	for (offset = NVME_REG_CAP; offset <= NVME_REG_CMBSZ;) {
+		err = nvme_get_property(fd, offset, *pbar + offset);
+		if (err) {
 			free(*pbar);
+			break;
+		}
+
+		offset += is_64bit_reg(offset) ? 8 : 4;
 	}
 
-	return ret;
+	return err;
 }
 
 int nvme_set_property(int fd, int offset, int value)

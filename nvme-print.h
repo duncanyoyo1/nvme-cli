@@ -14,6 +14,7 @@ enum {
 
 void d(unsigned char *buf, int len, int width, int group);
 void d_raw(unsigned char *buf, unsigned len);
+void show_nvme_status(__u16 status);
 
 uint64_t int48_to_long(__u8 *data);
 
@@ -38,13 +39,14 @@ void show_nvme_id_ns_descs(void *data);
 void show_list_items(struct list_item *list_items, unsigned len);
 void show_nvme_subsystem_list(struct subsys_list_item *slist, int n);
 void show_nvme_id_nvmset(struct nvme_id_nvmset *nvmset);
+void show_nvme_list_secondary_ctrl(const struct nvme_secondary_controllers_list *sc_list, __u32 count);
 
 void nvme_feature_show_fields(__u32 fid, unsigned int result, unsigned char *buf);
 void nvme_directive_show_fields(__u8 dtype, __u8 doper, unsigned int result, unsigned char *buf);
-char *nvme_status_to_string(__u32 status);
-char *nvme_select_to_string(int sel);
-char *nvme_feature_to_string(int feature);
-char *nvme_register_to_string(int reg);
+const char *nvme_status_to_string(__u32 status);
+const char *nvme_select_to_string(int sel);
+const char *nvme_feature_to_string(int feature);
+const char *nvme_register_to_string(int reg);
 void nvme_show_select_result(__u32 result);
 
 void json_nvme_id_ctrl(struct nvme_id_ctrl *ctrl, unsigned int mode, void (*vendor_show)(__u8 *vs, struct json_object *root));
@@ -65,6 +67,6 @@ void json_print_nvme_subsystem_list(struct subsys_list_item *slist, int n);
 void json_self_test_log(struct nvme_self_test_log *self_test, const char *devname);
 void json_nvme_id_nvmset(struct nvme_id_nvmset *nvmset, const char *devname);
 void json_ctrl_registers(void *bar);
-
+void json_nvme_list_secondary_ctrl(const struct nvme_secondary_controllers_list *sc_list, __u32 count);
 
 #endif
