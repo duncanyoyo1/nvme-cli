@@ -3,240 +3,107 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <inttypes.h>
 
 #include "linux/nvme_ioctl.h"
 
+#include "common.h"
 #include "nvme.h"
 #include "nvme-print.h"
 #include "nvme-ioctl.h"
+#include "json.h"
 #include "plugin.h"
 
 #include "argconfig.h"
 #include "suffix.h"
 
 #define CREATE_CMD
-#include "memblaze-nvme.h"
+#include "shannon-nvme.h"
 
-enum {
-	TOTAL_WRITE,
-	TOTAL_READ,
-	THERMAL_THROTTLE,
-	TEMPT_SINCE_RESET,
-	POWER_CONSUMPTION,
-	TEMPT_SINCE_BOOTUP,
-	POWER_LOSS_PROTECTION,
+typedef enum {
+	PROGRAM_FAIL_CNT,
+	ERASE_FAIL_CNT,
 	WEARLEVELING_COUNT,
+	E2E_ERR_CNT,
+	CRC_ERR_CNT,
+	TIME_WORKLOAD_MEDIA_WEAR,	
+	TIME_WORKLOAD_HOST_READS, 	
+	TIME_WORKLOAD_TIMER,	  	
+	THERMAL_THROTTLE,	      
+	RETRY_BUFFER_OVERFLOW,		
+	PLL_LOCK_LOSS,			 	
+	NAND_WRITE,
 	HOST_WRITE,
-	THERMAL_THROTTLE_CNT,
-	CORRECT_PCIE_PORT0,
-	CORRECT_PCIE_PORT1,
-	REBUILD_FAIL,
-	ERASE_FAIL,
-	PROGRAM_FAIL,
-	READ_FAIL,
-	NR_SMART_ITEMS,
-};
+	ADD_SMART_ITEMS,
+}addtional_smart_items;
 
-enum {
-	MB_FEAT_POWER_MGMT = 0Xc6,
-};
-
-#pragma pack(push, 1)
-struct nvme_memblaze_smart_log_item {
-	__u8 id[3];
+#pragma pack(push,1)
+struct nvme_shannon_smart_log_item {
+	__u8			_resv[5];
 	union {
-		__u8	__nmval[2];
-		__le16  nmval;
-	};
-	union {
-		__u8 rawval[6];
-		struct temperature {
-			__le16 max;
-			__le16 min;
-			__le16 curr;
-		} temperature;
-		struct power {
-			__le16 max;
-			__le16 min;
-			__le16 curr;
-		} power;
-		struct thermal_throttle_mb {
-			__u8 on;
-			__u32 count;
+		__u8		item_val[6];
+		struct wear_level {
+			__le16	min;
+			__le16	max;
+			__le16	avg;
+		} wear_level ;
+		struct thermal_throttle {
+			__u8	st;
+			__u32	count;
 		} thermal_throttle;
-		struct temperature_p {
-			__le16 max;
-			__le16 min;
-		} temperature_p;
-		struct power_loss_protection {
-			__u8 curr;
-		} power_loss_protection;
-		struct wearleveling_count {
-			__le16 min;
-			__le16 max;
-			__le16 avg;
-		} wearleveling_count;
-		struct thermal_throttle_cnt {
-			__u8 active;
-			__le32 cnt;
-		} thermal_throttle_cnt;
 	};
-	__u8 resv;
+	__u8			resv;
 };
 #pragma pack(pop)
 
-struct nvme_memblaze_smart_log {
-	struct nvme_memblaze_smart_log_item items[NR_SMART_ITEMS];
-	__u8 resv[512 - sizeof(struct nvme_memblaze_smart_log_item) * NR_SMART_ITEMS];
+struct nvme_shannon_smart_log {
+	struct nvme_shannon_smart_log_item items[ADD_SMART_ITEMS];
+	 __u8  vend_spec_resv; 
 };
 
-/*
- * Return -1 if @fw1 < @fw2
- * Return 0 if @fw1 == @fw2
- * Return 1 if @fw1 > @fw2
- */
-static int compare_fw_version(const char *fw1, const char *fw2)
+static void show_shannon_smart_log(struct nvme_shannon_smart_log *smart,
+		unsigned int nsid, const char *devname)
 {
-	while (*fw1 != '\0') {
-		if (*fw2 == '\0' || *fw1 > *fw2)
-			return 1;
-		if (*fw1 < *fw2)
-			return -1;
-		fw1++;
-		fw2++;
-	}
-
-	if (*fw2 != '\0')
-		return -1;
-
-	return 0;
-}
-
-static __u32 item_id_2_u32(struct nvme_memblaze_smart_log_item *item)
-{
-	__le32	__id = 0;
-	memcpy(&__id, item->id, 3);
-	return le32_to_cpu(__id);
-}
-
-static __u64 raw_2_u64(const __u8 *buf, size_t len)
-{
-	__le64	val = 0;
-	memcpy(&val, buf, len);
-	return le64_to_cpu(val);
-}
-
-static int show_memblaze_smart_log(int fd, __u32 nsid, const char *devname,
-		struct nvme_memblaze_smart_log *smart)
-{
-	struct nvme_id_ctrl ctrl;
-	char fw_ver[10];
-	int err = 0;
-	struct nvme_memblaze_smart_log_item *item;
-
-	err = nvme_identify_ctrl(fd, &ctrl);
-	if (err)
-		return err;
-	snprintf(fw_ver, sizeof(fw_ver), "%c.%c%c.%c%c%c%c",
-		ctrl.fr[0], ctrl.fr[1], ctrl.fr[2], ctrl.fr[3],
-		ctrl.fr[4], ctrl.fr[5], ctrl.fr[6]);
-
-	printf("Additional Smart Log for NVME device:%s namespace-id:%x\n", devname, nsid);
-
-	printf("Total write in GB since last factory reset			: %"PRIu64"\n",
-		int48_to_long(smart->items[TOTAL_WRITE].rawval));
-	printf("Total read in GB since last factory reset			: %"PRIu64"\n",
-		int48_to_long(smart->items[TOTAL_READ].rawval));
-
-	printf("Thermal throttling status[1:HTP in progress]			: %u\n",
-		smart->items[THERMAL_THROTTLE].thermal_throttle.on);
-	printf("Total thermal throttling minutes since power on			: %u\n",
+	printf("Additional Smart Log for NVME device:%s namespace-id:%x\n",
+		devname, nsid);
+	printf("key                               value\n");
+	printf("program_fail_count              : %"PRIu64"\n",
+		int48_to_long(smart->items[PROGRAM_FAIL_CNT].item_val));
+	printf("erase_fail_count                : %"PRIu64"\n",
+		int48_to_long(smart->items[ERASE_FAIL_CNT].item_val));
+	printf("wear_leveling                   : min: %u, max: %u, avg: %u\n",
+		le16_to_cpu(smart->items[WEARLEVELING_COUNT].wear_level.min),
+		le16_to_cpu(smart->items[WEARLEVELING_COUNT].wear_level.max),
+		le16_to_cpu(smart->items[WEARLEVELING_COUNT].wear_level.avg));
+	printf("end_to_end_error_detection_count: %"PRIu64"\n",
+		int48_to_long(smart->items[E2E_ERR_CNT].item_val));
+	printf("crc_error_count                 : %"PRIu64"\n",
+		int48_to_long(smart->items[CRC_ERR_CNT].item_val));
+	printf("timed_workload_media_wear       : %.3f%%\n",
+		((float)int48_to_long(smart->items[TIME_WORKLOAD_MEDIA_WEAR].item_val)) / 1024);
+	printf("timed_workload_host_reads       : %"PRIu64"%%\n",
+		int48_to_long(smart->items[TIME_WORKLOAD_HOST_READS].item_val));
+	printf("timed_workload_timer            : %"PRIu64" min\n",
+		int48_to_long(smart->items[TIME_WORKLOAD_TIMER].item_val));
+	printf("thermal_throttle_status         : CurTTState: %u%%, TTActiveCnt: %u\n",
+		smart->items[THERMAL_THROTTLE].thermal_throttle.st,
 		smart->items[THERMAL_THROTTLE].thermal_throttle.count);
-
-	printf("Maximum temperature in Kelvin since last factory reset		: %u\n",
-		le16_to_cpu(smart->items[TEMPT_SINCE_RESET].temperature.max));
-	printf("Minimum temperature in Kelvin since last factory reset		: %u\n",
-		le16_to_cpu(smart->items[TEMPT_SINCE_RESET].temperature.min));
-	if (compare_fw_version(fw_ver, "0.09.0300") != 0) {
-		printf("Maximum temperature in Kelvin since power on			: %u\n",
-			le16_to_cpu(smart->items[TEMPT_SINCE_BOOTUP].temperature_p.max));
-		printf("Minimum temperature in Kelvin since power on			: %u\n",
-			le16_to_cpu(smart->items[TEMPT_SINCE_BOOTUP].temperature_p.min));
-	}
-	printf("Current temperature in Kelvin					: %u\n",
-		le16_to_cpu(smart->items[TEMPT_SINCE_RESET].temperature.curr));
-
-	printf("Maximum power in watt since power on				: %u\n",
-		le16_to_cpu(smart->items[POWER_CONSUMPTION].power.max));
-	printf("Minimum power in watt since power on				: %u\n",
-		le16_to_cpu(smart->items[POWER_CONSUMPTION].power.min));
-	printf("Current power in watt						: %u\n",
-		le16_to_cpu(smart->items[POWER_CONSUMPTION].power.curr));
-
-	item = &smart->items[POWER_LOSS_PROTECTION];
-	if (item_id_2_u32(item) == 0xEC)
-		printf("Power loss protection normalized value				: %u\n",
-			item->power_loss_protection.curr);
-
-	item = &smart->items[WEARLEVELING_COUNT];
-	if (item_id_2_u32(item) == 0xAD) {
-		printf("Percentage of wearleveling count left				: %u\n",
-				le16_to_cpu(item->nmval));
-		printf("Wearleveling count min erase cycle				: %u\n",
-				le16_to_cpu(item->wearleveling_count.min));
-		printf("Wearleveling count max erase cycle				: %u\n",
-				le16_to_cpu(item->wearleveling_count.max));
-		printf("Wearleveling count avg erase cycle				: %u\n",
-				le16_to_cpu(item->wearleveling_count.avg));
-	}
-
-	item = &smart->items[HOST_WRITE];
-	if (item_id_2_u32(item) == 0xF5)
-		printf("Total host write in GiB since device born 			: %llu\n",
-				(unsigned long long)raw_2_u64(item->rawval, sizeof(item->rawval)));
-		
-	item = &smart->items[THERMAL_THROTTLE_CNT];
-	if (item_id_2_u32(item) == 0xEB)
-		printf("Thermal throttling count since device born 			: %u\n",
-				item->thermal_throttle_cnt.cnt);
-
-	item = &smart->items[CORRECT_PCIE_PORT0];
-	if (item_id_2_u32(item) == 0xED)
-		printf("PCIE Correctable Error Count of Port0    			: %llu\n",
-				(unsigned long long)raw_2_u64(item->rawval, sizeof(item->rawval)));
-
-	item = &smart->items[CORRECT_PCIE_PORT1];
-	if (item_id_2_u32(item) == 0xEE)
-		printf("PCIE Correctable Error Count of Port1 	        		: %llu\n",
-				(unsigned long long)raw_2_u64(item->rawval, sizeof(item->rawval)));
-
-	item = &smart->items[REBUILD_FAIL];
-	if (item_id_2_u32(item) == 0xEF)
-		printf("End-to-End Error Detection Count 	        		: %llu\n",
-				(unsigned long long)raw_2_u64(item->rawval, sizeof(item->rawval)));
-
-	item = &smart->items[ERASE_FAIL];
-	if (item_id_2_u32(item) == 0xF0)
-		printf("Erase Fail Count 		                        	: %llu\n",
-				(unsigned long long)raw_2_u64(item->rawval, sizeof(item->rawval)));
-
-    item = &smart->items[PROGRAM_FAIL];
-	if (item_id_2_u32(item) == 0xF1)
-		printf("Program Fail Count 		                        	: %llu\n",
-				(unsigned long long)raw_2_u64(item->rawval, sizeof(item->rawval)));
-
-	item = &smart->items[READ_FAIL];
-	if (item_id_2_u32(item) == 0xF2)
-		printf("Read Fail Count	                                 		: %llu\n",
-				(unsigned long long)raw_2_u64(item->rawval, sizeof(item->rawval)));
-	return err;
+	printf("retry_buffer_overflow_count     : %"PRIu64"\n",
+		int48_to_long(smart->items[RETRY_BUFFER_OVERFLOW].item_val));
+	printf("pll_lock_loss_count             : %"PRIu64"\n",
+		int48_to_long(smart->items[PLL_LOCK_LOSS].item_val));
+	printf("nand_bytes_written              : sectors: %"PRIu64"\n",
+		int48_to_long(smart->items[NAND_WRITE].item_val));
+	printf("host_bytes_written              : sectors: %"PRIu64"\n",
+		int48_to_long(smart->items[HOST_WRITE].item_val));
 }
+
 
 static int get_additional_smart_log(int argc, char **argv, struct command *cmd, struct plugin *plugin)
 {
-	struct nvme_memblaze_smart_log smart_log;
+	struct nvme_shannon_smart_log smart_log;
 	int err, fd;
-	char *desc = "Get Memblaze vendor specific additional smart log (optionally, "\
+	char *desc = "Get Shannon vendor specific additional smart log (optionally, "\
 		      "for the specified namespace), and show it.";
 	const char *namespace = "(optional) desired namespace";
 	const char *raw = "dump output in binary format";
@@ -256,29 +123,19 @@ static int get_additional_smart_log(int argc, char **argv, struct command *cmd, 
 	};
 
 	fd = parse_and_open(argc, argv, desc, command_line_options, &cfg, sizeof(cfg));
-	if (fd < 0)
-		return fd;
 
 	err = nvme_get_log(fd, cfg.namespace_id, 0xca, false,
-			   sizeof(smart_log), &smart_log);
+		   sizeof(smart_log), &smart_log);
 	if (!err) {
 		if (!cfg.raw_binary)
-			err = show_memblaze_smart_log(fd, cfg.namespace_id, devicename, &smart_log);
+			show_shannon_smart_log(&smart_log, cfg.namespace_id, devicename);
 		else
 			d_raw((unsigned char *)&smart_log, sizeof(smart_log));
 	}
-	if (err > 0)
-		fprintf(stderr, "NVMe Status:%s(%x)\n", nvme_status_to_string(err), err);
-
+	else if (err > 0)
+		fprintf(stderr, "NVMe Status:%s(%x)\n",
+					nvme_status_to_string(err), err);
 	return err;
-}
-
-static char *mb_feature_to_string(int feature)
-{
-	switch (feature) {
-	case MB_FEAT_POWER_MGMT: return "Memblaze power management";
-	default:	return "Unknown";
-	}
 }
 
 static int get_additional_feature(int argc, char **argv, struct command *cmd, struct plugin *plugin)
@@ -293,8 +150,7 @@ static int get_additional_feature(int argc, char **argv, struct command *cmd, st
 		"are vendor-specific and not changeable. Use set-feature to "\
 		"change saveable Features.\n\n"\
 		"Available additional feature id:\n"\
-		"0xc6:	Memblaze power management\n"\
-		"	(value 0 - 25w, 1 - 20w, 2 - 15w)";
+		"0x02:	Shannon power management\n";
 	const char *raw_binary = "show infos in binary format";
 	const char *namespace_id = "identifier of desired namespace";
 	const char *feature_id = "hexadecimal feature name";
@@ -341,15 +197,20 @@ static int get_additional_feature(int argc, char **argv, struct command *cmd, st
 
 	if (cfg.sel > 7) {
 		fprintf(stderr, "invalid 'select' param:%d\n", cfg.sel);
+		close(fd);
 		return EINVAL;
 	}
 	if (!cfg.feature_id) {
 		fprintf(stderr, "feature-id required param\n");
+		close(fd);
 		return EINVAL;
 	}
 	if (cfg.data_len) {
 		if (posix_memalign(&buf, getpagesize(), cfg.data_len))
+		{
+			close(fd);
 			exit(ENOMEM);
+		}
 		memset(buf, 0, cfg.data_len);
 	}
 
@@ -357,7 +218,7 @@ static int get_additional_feature(int argc, char **argv, struct command *cmd, st
 			cfg.data_len, buf, &result);
 	if (!err) {
 		printf("get-feature:0x%02x (%s), %s value: %#08x\n", cfg.feature_id,
-				mb_feature_to_string(cfg.feature_id),
+				nvme_feature_to_string(cfg.feature_id),
 				nvme_select_to_string(cfg.sel), result);
 		if (cfg.human_readable)
 			nvme_feature_show_fields(cfg.feature_id, result, buf);
@@ -389,8 +250,7 @@ static int set_additional_feature(int argc, char **argv, struct command *cmd, st
 		"Use get-feature to determine which Features are supported by "\
 		"the controller and are saveable/changeable.\n\n"\
 		"Available additional feature id:\n"\
-		"0xc6:	Memblaze power management\n"\
-		"	(value 0 - 25w, 1 - 20w, 2 - 15w)";
+		"0x02:	Shannon power management\n";
 	const char *namespace_id = "desired namespace";
 	const char *feature_id = "hex feature name (required)";
 	const char *data_len = "buffer length if data required";
@@ -436,12 +296,16 @@ static int set_additional_feature(int argc, char **argv, struct command *cmd, st
 
 	if (!cfg.feature_id) {
 		fprintf(stderr, "feature-id required param\n");
+		close(fd);
 		return EINVAL;
 	}
 
 	if (cfg.data_len) {
-		if (posix_memalign(&buf, getpagesize(), cfg.data_len))
-			exit(ENOMEM);
+		if (posix_memalign(&buf, getpagesize(), cfg.data_len)){
+			fprintf(stderr, "can not allocate feature payload\n");
+			close(fd);
+			return ENOMEM;
+		}
 		memset(buf, 0, cfg.data_len);
 	}
 
@@ -454,7 +318,8 @@ static int set_additional_feature(int argc, char **argv, struct command *cmd, st
 				goto free;
 			}
 		}
-		if (read(ffd, (void *)buf, cfg.data_len) < 0) {
+		err = read(ffd, (void *)buf, cfg.data_len);
+		if (err < 0) {
 			fprintf(stderr, "failed to read data buffer from input file\n");
 			err = EINVAL;
 			goto free;
@@ -469,7 +334,7 @@ static int set_additional_feature(int argc, char **argv, struct command *cmd, st
 	}
 	if (!err) {
 		printf("set-feature:%02x (%s), value:%#08x\n", cfg.feature_id,
-			mb_feature_to_string(cfg.feature_id), cfg.value);
+			nvme_feature_to_string(cfg.feature_id), cfg.value);
 		if (buf)
 			d(buf, cfg.data_len, 16, 1);
 	} else if (err > 0)
@@ -481,3 +346,11 @@ free:
 		free(buf);
 	return err;
 }
+
+static int shannon_id_ctrl(int argc, char **argv, struct command *cmd, struct plugin *plugin)
+{
+	return __id_ctrl(argc, argv, cmd, plugin, NULL);
+}
+
+
+

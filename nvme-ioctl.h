@@ -38,6 +38,9 @@ int nvme_compare(int fd, __u64 slba, __u16 nblocks, __u16 control,
 		 __u32 dsmgmt, __u32 reftag, __u16 apptag,
 		 __u16 appmask, void *data, void *metadata);
 
+int nvme_verify(int fd, __u32 nsid, __u64 slba, __u16 nblocks,
+		__u16 control, __u32 reftag, __u16 apptag, __u16 appmask);
+
 /* NVME_IO_CMD */
 int nvme_passthru_io(int fd, __u8 opcode, __u8 flags, __u16 rsvd,
 		     __u32 nsid, __u32 cdw2, __u32 cdw3,
@@ -133,7 +136,7 @@ int nvme_dir_send(int fd, __u32 nsid, __u16 dspec, __u8 dtype, __u8 doper,
 int nvme_dir_recv(int fd, __u32 nsid, __u16 dspec, __u8 dtype, __u8 doper,
 		  __u32 data_len, __u32 dw12, void *data, __u32 *result);
 int nvme_get_properties(int fd, void **pbar);
-int nvme_set_property(int fd, int offset, int value);
+int nvme_set_property(int fd, int offset, uint64_t value);
 int nvme_get_property(int fd, int offset, uint64_t *value);
 int nvme_sanitize(int fd, __u8 sanact, __u8 ause, __u8 owpass, __u8 oipbp,
 		  __u8 no_dealloc, __u32 ovrpat);

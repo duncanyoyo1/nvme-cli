@@ -7,6 +7,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <errno.h>
+#include "nvme-models.h"
 
 static char *_fmt1 = "/sys/class/nvme/nvme%d/device/subsystem_vendor";
 static char *_fmt2 = "/sys/class/nvme/nvme%d/device/subsystem_device";
@@ -259,8 +260,7 @@ static FILE *open_pci_ids(void)
 	if ((pci_ids_path = getenv("PCI_IDS_PATH")) != NULL) {
 		if ((fp = fopen(pci_ids_path, "r")) != NULL) {
 			return fp;
-		}
-		else {
+		} else {
 			/* fail if user provided environment variable but could not open */
 			perror(pci_ids_path);
 			return NULL;

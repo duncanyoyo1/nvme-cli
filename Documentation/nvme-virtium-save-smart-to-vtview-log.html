@@ -1,11 +1,10 @@
-<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN"
     "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
 <head>
 <meta http-equiv="Content-Type" content="application/xhtml+xml; charset=UTF-8" />
-<meta name="generator" content="AsciiDoc 8.6.10" />
-<title>nvme(1)</title>
+<meta name="generator" content="AsciiDoc 8.6.8" />
+<title>nvme-virtium-save-smart-to-vtview-log(1)</title>
 <style type="text/css">
 /* Shared CSS for AsciiDoc xhtml11 and html5 backends */
 
@@ -95,9 +94,7 @@ ul > li > * { color: black; }
   padding: 0;
   margin: 0;
 }
-pre {
-  white-space: pre-wrap;
-}
+
 
 #author {
   color: #527bbd;
@@ -226,7 +223,7 @@ div.exampleblock > div.content {
 }
 
 div.imageblock div.content { padding-left: 0; }
-span.image img { border-style: none; vertical-align: text-bottom; }
+span.image img { border-style: none; }
 a.image:visited { color: white; }
 
 dl {
@@ -735,12 +732,12 @@ asciidoc.install();
 <body class="manpage">
 <div id="header">
 <h1>
-nvme(1) Manual Page
+nvme-virtium-save-smart-to-vtview-log(1) Manual Page
 </h1>
 <h2>NAME</h2>
 <div class="sectionbody">
-<p>nvme -
-   the NVMe storage command line interface utility (nvme-cli)
+<p>nvme-virtium-save-smart-to-vtview-log -
+   Periodically save smart attributes into a log file (csv format).
 </p>
 </div>
 </div>
@@ -748,14 +745,11 @@ nvme(1) Manual Page
 <div class="sect1">
 <h2 id="_synopsis">SYNOPSIS</h2>
 <div class="sectionbody">
-<div class="paragraph"><p>bulit-in plugin:</p></div>
 <div class="verseblock">
-<pre class="content"><em>nvme</em> &lt;command&gt; &lt;device&gt; [&lt;args&gt;]</pre>
-<div class="attribution">
-</div></div>
-<div class="paragraph"><p>extension plugins:</p></div>
-<div class="verseblock">
-<pre class="content"><em>nvme</em> &lt;plugin&gt; &lt;command&gt; &lt;device&gt; [&lt;args&gt;]</pre>
+<pre class="content"><em>nvme virtium save-smart-to-vtview-log</em> &lt;device&gt; [--run-time=&lt;NUM&gt; | -r &lt;NUM&gt;]
+                        [--freq=&lt;NUM&gt; | -f &lt;NUM&gt;]
+                        [--output-file=&lt;FILE&gt; | -o &lt;FILE&gt;]
+                        [--test-name=&lt;NAME&gt; | -n &lt;NAME&gt;]</pre>
 <div class="attribution">
 </div></div>
 </div>
@@ -763,434 +757,122 @@ nvme(1) Manual Page
 <div class="sect1">
 <h2 id="_description">DESCRIPTION</h2>
 <div class="sectionbody">
-<div class="paragraph"><p>NVM-Express is a fast, scalable host controller interface designed to
-address the needs for not only PCI Express based solid state drives, but
-also NVMe-oF(over fabrics).</p></div>
-<div class="paragraph"><p>This <em>nvme</em> program is a user space utility to provide standards compliant
-tooling for NVM-Express drives. It was made specifically for Linux as
-it relies on the IOCTLs defined by the mainline kernel driver.</p></div>
+<div class="paragraph"><p>This command automates the process of collecting SMART data periodically and
+saving the data in a ready-to-analyze format. Each entry is saved
+with timestamp and in csv format. Users can use excel to analyze the data.
+Some examples of use cases are collecting SMART data for temperature characterization,
+collecting data to calculate endurance, or collecting SMART data during a test
+or during normal operation.</p></div>
+<div class="paragraph"><p>The &lt;device&gt; parameter is mandatory and may be either the NVMe character
+device (ex: /dev/nvme0), or a namespace block device (ex: /dev/nvme0n1).</p></div>
+<div class="paragraph"><p>On success, the command generates a log file, which contains an entry for identify device
+(current features &amp; settings) and periodic entries of SMART data.</p></div>
+<div class="paragraph"><p>This command runs for the time specified by the option &lt;run-time&gt;, and collects SMART data
+at the frequency specified by the option &lt;freq&gt;. If the output file name is not specified,
+this command will generate a file name that include model string and serial number of the device.</p></div>
+<div class="paragraph"><p>If the test-name option is specified, it will be recorded in the log file and be used as part
+of the log file name.</p></div>
 </div>
 </div>
 <div class="sect1">
-<h2 id="_nvme_commands">NVME COMMANDS</h2>
+<h2 id="_options">OPTIONS</h2>
 <div class="sectionbody">
-<div class="paragraph"><p>The utility has sub-commands for all admin and io commands defined in the
-specification and for displaying controller registers. There is also an
-option to submit completely arbitrary commands. For a list of commands
-available, run "nvme help".</p></div>
-</div>
-</div>
-<div class="sect1">
-<h2 id="_nvme_cli_sub_commands">nvme cli sub-commands</h2>
-<div class="sectionbody">
-<div class="sect2">
-<h3 id="_main_commands">Main commands</h3>
 <div class="dlist"><dl>
 <dt class="hdlist1">
-<a href="nvme-admin-passthru.html">nvme-admin-passthru(1)</a>
+-r &lt;NUM&gt;
+</dt>
+<dt class="hdlist1">
+--run-tim=&lt;NUM&gt;
 </dt>
 <dd>
 <p>
-        Admin Passthrough Command
+        (optional) Number of hours to log data (default = 20 hours)
 </p>
 </dd>
 <dt class="hdlist1">
-<a href="nvme-compare.html">nvme-compare(1)</a>
+-f &lt;NUM&gt;
+</dt>
+<dt class="hdlist1">
+--freq=&lt;NUM&gt;
 </dt>
 <dd>
 <p>
-        IO Compare
+        (optional) How often you want to log SMART data
+        (0.25 = 15' , 0.5 = 30' , 1 = 1 hour, 2 = 2 hours, etc.). Default = 10 hours.
 </p>
 </dd>
 <dt class="hdlist1">
-<a href="nvme-error-log.html">nvme-error-log(1)</a>
+-o &lt;FILE&gt;
+</dt>
+<dt class="hdlist1">
+--output-file=&lt;FILE&gt;
 </dt>
 <dd>
 <p>
-        Retrieve error logs
+    (optional) Name of the log file (give it a name that easy for you to remember
+        what the test is). You can leave it blank too, the file name will be generated
+        as &lt;model string&gt;-&lt;serial number&gt;-&lt;test name&gt;.txt.
 </p>
 </dd>
 <dt class="hdlist1">
-<a href="nvme-flush.html">nvme-flush(1)</a>
+-n &lt;NAME&gt;
 </dt>
-<dd>
-<p>
-        Submit flush
-</p>
-</dd>
 <dt class="hdlist1">
-<a href="nvme-dms.html">nvme-dms(1)</a>
+--test-name=&lt;NAME&gt;
 </dt>
 <dd>
 <p>
-        Submit Data Set Management
-</p>
-</dd>
-<dt class="hdlist1">
-<a href="nvme-format.html">nvme-format(1)</a>
-</dt>
-<dd>
-<p>
-        Format namespace(s)
-</p>
-</dd>
-<dt class="hdlist1">
-<a href="nvme-fw-activate.html">nvme-fw-activate(1)</a>
-</dt>
-<dd>
-<p>
-        F/W Activate
-</p>
-</dd>
-<dt class="hdlist1">
-<a href="nvme-fw-download.html">nvme-fw-download(1)</a>
-</dt>
-<dd>
-<p>
-        F/W Download
-</p>
-</dd>
-<dt class="hdlist1">
-<a href="nvme-fw-log.html">nvme-fw-log(1)</a>
-</dt>
-<dd>
-<p>
-        Retrieve f/w log
-</p>
-</dd>
-<dt class="hdlist1">
-<a href="nvme-get-feature.html">nvme-get-feature(1)</a>
-</dt>
-<dd>
-<p>
-        Get Features
-</p>
-</dd>
-<dt class="hdlist1">
-<a href="nvme-get-log.html">nvme-get-log(1)</a>
-</dt>
-<dd>
-<p>
-        Generic Get Log
-</p>
-</dd>
-<dt class="hdlist1">
-<a href="nvme-telemetry-log.html">nvme-telemetry-log(1)</a>
-</dt>
-<dd>
-<p>
-        Telemetry Host-Initiated Log
-</p>
-</dd>
-<dt class="hdlist1">
-<a href="nvme-smart-log.html">nvme-smart-log(1)</a>
-</dt>
-<dd>
-<p>
-        Retrieve Smart Log
-</p>
-</dd>
-<dt class="hdlist1">
-<a href="nvme-endurance-log.html">nvme-endurance-log(1)</a>
-</dt>
-<dd>
-<p>
-        Retrieve endurance Log
-</p>
-</dd>
-<dt class="hdlist1">
-<a href="nvme-effects-log.html">nvme-effects-log(1)</a>
-</dt>
-<dd>
-<p>
-        Retrieve effects Log
-</p>
-</dd>
-<dt class="hdlist1">
-<a href="nvme-get-ns-id.html">nvme-get-ns-id(1)</a>
-</dt>
-<dd>
-<p>
-        Retrieve namespace identifier
-</p>
-</dd>
-<dt class="hdlist1">
-<a href="nvme-help.html">nvme-help(1)</a>
-</dt>
-<dd>
-<p>
-        NVMe CLI Help
-</p>
-</dd>
-<dt class="hdlist1">
-<a href="nvme-id-ctrl.html">nvme-id-ctrl(1)</a>
-</dt>
-<dd>
-<p>
-        Identify Controller
-</p>
-</dd>
-<dt class="hdlist1">
-<a href="nvme-id-ns.html">nvme-id-ns(1)</a>
-</dt>
-<dd>
-<p>
-        Identify Namespace
-</p>
-</dd>
-<dt class="hdlist1">
-<a href="nvme-create-ns.html">nvme-create-ns(1)</a>
-</dt>
-<dd>
-<p>
-        Create a new namespace
-</p>
-</dd>
-<dt class="hdlist1">
-<a href="nvme-delete-ns.html">nvme-delete-ns(1)</a>
-</dt>
-<dd>
-<p>
-        Delete existing namespace
-</p>
-</dd>
-<dt class="hdlist1">
-<a href="nvme-attach-ns.html">nvme-attach-ns(1)</a>
-</dt>
-<dd>
-<p>
-        Attach namespace
-</p>
-</dd>
-<dt class="hdlist1">
-<a href="nvme-detach-ns.html">nvme-detach-ns(1)</a>
-</dt>
-<dd>
-<p>
-        Detach namespace
-</p>
-</dd>
-<dt class="hdlist1">
-<a href="nvme-io-passthru.html">nvme-io-passthru(1)</a>
-</dt>
-<dd>
-<p>
-        IO Passthrough Command
-</p>
-</dd>
-<dt class="hdlist1">
-<a href="nvme-list-ns.html">nvme-list-ns(1)</a>
-</dt>
-<dd>
-<p>
-        List all nvme namespaces
-</p>
-</dd>
-<dt class="hdlist1">
-<a href="nvme-ns-descs.html">nvme-ns-descs(1)</a>
-</dt>
-<dd>
-<p>
-        Identify Namespace Identification Descriptor
-</p>
-</dd>
-<dt class="hdlist1">
-<a href="nvme-list.html">nvme-list(1)</a>
-</dt>
-<dd>
-<p>
-        List all nvme controllers
-</p>
-</dd>
-<dt class="hdlist1">
-<a href="nvme-list-ctrl.html">nvme-list-ctrl(1)</a>
-</dt>
-<dd>
-<p>
-        List controller in NVMe subsystem
-</p>
-</dd>
-<dt class="hdlist1">
-<a href="nvme-read.html">nvme-read(1)</a>
-</dt>
-<dd>
-<p>
-        Issue IO Read Command
-</p>
-</dd>
-<dt class="hdlist1">
-<a href="nvme-write.html">nvme-write(1)</a>
-</dt>
-<dd>
-<p>
-        Issue IO Write Command
-</p>
-</dd>
-<dt class="hdlist1">
-<a href="nvme-write-zeroes.html">nvme-write-zeroes(1)</a>
-</dt>
-<dd>
-<p>
-        Issue IO Write Zeroes Command
-</p>
-</dd>
-<dt class="hdlist1">
-<a href="nvme-write-uncor.html">nvme-write-uncor(1)</a>
-</dt>
-<dd>
-<p>
-        Issue IO Write Uncorrectable Command
-</p>
-</dd>
-<dt class="hdlist1">
-<a href="nvme-resv-acquire.html">nvme-resv-acquire(1)</a>
-</dt>
-<dd>
-<p>
-        Acquire Namespace Reservation
-</p>
-</dd>
-<dt class="hdlist1">
-<a href="nvme-resv-register.html">nvme-resv-register(1)</a>
-</dt>
-<dd>
-<p>
-        Register Namespace Reservation
-</p>
-</dd>
-<dt class="hdlist1">
-<a href="nvme-resv-release.html">nvme-resv-release(1)</a>
-</dt>
-<dd>
-<p>
-        Release Namespace Reservation
-</p>
-</dd>
-<dt class="hdlist1">
-<a href="nvme-resv-report.html">nvme-resv-report(1)</a>
-</dt>
-<dd>
-<p>
-        Report Reservation Capabilities
-</p>
-</dd>
-<dt class="hdlist1">
-<a href="nvme-security-recv.html">nvme-security-recv(1)</a>
-</dt>
-<dd>
-<p>
-        Security Receive
-</p>
-</dd>
-<dt class="hdlist1">
-<a href="nvme-security-send.html">nvme-security-send(1)</a>
-</dt>
-<dd>
-<p>
-        Security Send
-</p>
-</dd>
-<dt class="hdlist1">
-<a href="nvme-set-feature.html">nvme-set-feature(1)</a>
-</dt>
-<dd>
-<p>
-        Set Feature
-</p>
-</dd>
-<dt class="hdlist1">
-<a href="nvme-show-regs.html">nvme-show-regs(1)</a>
-</dt>
-<dd>
-<p>
-        Show NVMe Controller Registers
-</p>
-</dd>
-<dt class="hdlist1">
-<a href="nvme-discover.html">nvme-discover(1)</a>
-</dt>
-<dd>
-<p>
-        Send Get Log Page request to Discovery Controller
-</p>
-</dd>
-<dt class="hdlist1">
-<a href="nvme-connect-all.html">nvme-connect-all(1)</a>
-</dt>
-<dd>
-<p>
-        Discover and connect to all NVMe-over-Fabrics subsystems
-</p>
-</dd>
-<dt class="hdlist1">
-<a href="nvme-connect.html">nvme-connect(1)</a>
-</dt>
-<dd>
-<p>
-        Connect to an NVMe-over-Fabrics subsystem
-</p>
-</dd>
-<dt class="hdlist1">
-<a href="nvme-disconnect.html">nvme-disconnect(1)</a>
-</dt>
-<dd>
-<p>
-        Disconnect from an NVMe-over-Fabrics subsystem
-</p>
-</dd>
-<dt class="hdlist1">
-<a href="nvme-disconnect-all.html">nvme-disconnect-all(1)</a>
-</dt>
-<dd>
-<p>
-        Disconnect from all NVMe-over-Fabrics subsystems
-</p>
-</dd>
-<dt class="hdlist1">
-<a href="nvme-get-property.html">nvme-get-property(1)</a>
-</dt>
-<dd>
-<p>
-        Reads and shows NVMe-over-Fabrics controller property
+    (optional) Name of the test you are doing. We use this string as part of the name of the log file.
 </p>
 </dd>
 </dl></div>
 </div>
 </div>
-</div>
 <div class="sect1">
-<h2 id="_further_documentation">FURTHER DOCUMENTATION</h2>
+<h2 id="_examples">EXAMPLES</h2>
 <div class="sectionbody">
-<div class="paragraph"><p>See the freely available references on the <a href="http://nvmexpress.org">Official
-NVM-Express Site</a>.</p></div>
-</div>
-</div>
-<div class="sect1">
-<h2 id="_authors">Authors</h2>
-<div class="sectionbody">
-<div class="paragraph"><p>This is written and maintained by <a href="mailto:keith.busch@intel.com">Keith Busch</a>.</p></div>
-</div>
-</div>
-<div class="sect1">
-<h2 id="_reporting_bugs">Reporting Bugs</h2>
-<div class="sectionbody">
-<div class="paragraph"><p>Patches and issues may be submitted to the official repository at
-<a href="https://github.com/linux-nvme/nvme-cli">https://github.com/linux-nvme/nvme-cli</a> or the Linux NVMe mailing list
-<a href="mailto:linux-nvme@lists.infradead.org">linux-nvme</a></p></div>
+<div class="ulist"><ul>
+<li>
+<p>
+Temperature characterization:
+</p>
+<div class="listingblock">
+<div class="content">
+<pre><code># nvme virtium save-smart-to-vtview-log /dev/yourDevice --run-time=100 --record-frequency=0.25 --test-name=burn-in-at-(-40)</code></pre>
+</div></div>
+</li>
+<li>
+<p>
+Endurance testing:
+</p>
+<div class="listingblock">
+<div class="content">
+<pre><code># nvme virtium save-smart-to-vtview-log /dev/yourDevice --run-time=100 --record-frequency=1 --test-name=Endurance-test-JEDEG-219-workload</code></pre>
+</div></div>
+</li>
+<li>
+<p>
+Just logging: Default logging is run for 20 hours and log every 10 hours.
+</p>
+<div class="listingblock">
+<div class="content">
+<pre><code># nvme virtium save-smart-to-vtview-log /dev/yourDevice</code></pre>
+</div></div>
+</li>
+</ul></div>
 </div>
 </div>
 <div class="sect1">
 <h2 id="_nvme">NVME</h2>
 <div class="sectionbody">
-<div class="paragraph"><p>Part of the nvme suite</p></div>
+<div class="paragraph"><p>Part of the nvme-user suite</p></div>
 </div>
 </div>
 </div>
 <div id="footnotes"><hr /></div>
 <div id="footer">
 <div id="footer-text">
-Last updated
- 2019-07-24 00:35:34 KST
+Last updated 2019-05-22 16:39:59 MDT
 </div>
 </div>
 </body>

@@ -32,7 +32,8 @@ override CFLAGS += -DNVME_VERSION='"$(NVME_VERSION)"'
 NVME_DPKG_VERSION=1~`lsb_release -sc`
 
 OBJS := argconfig.o suffix.o parser.o nvme-print.o nvme-ioctl.o \
-	nvme-lightnvm.o fabrics.o json.o nvme-models.o plugin.o
+	nvme-lightnvm.o fabrics.o json.o nvme-models.o plugin.o \
+	nvme-status.o
 
 PLUGIN_OBJS :=					\
 	plugins/intel/intel-nvme.o		\
@@ -44,7 +45,9 @@ PLUGIN_OBJS :=					\
 	plugins/netapp/netapp-nvme.o		\
 	plugins/toshiba/toshiba-nvme.o		\
 	plugins/micron/micron-nvme.o		\
-	plugins/seagate/seagate-nvme.o
+	plugins/seagate/seagate-nvme.o 		\
+	plugins/virtium/virtium-nvme.o		\
+	plugins/shannon/shannon-nvme.o
 
 nvme: nvme.c nvme.h $(OBJS) $(PLUGIN_OBJS) NVME-VERSION-FILE
 	$(CC) $(CPPFLAGS) $(CFLAGS) nvme.c -o $(NVME) $(OBJS) $(PLUGIN_OBJS) $(LDFLAGS)

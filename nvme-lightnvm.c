@@ -422,13 +422,12 @@ static void show_lnvm_id20_ns(struct nvme_nvm_id20 *id, unsigned int flags)
 
 static void show_lnvm_id_ns(struct nvme_nvm_id *id, unsigned int flags)
 {
-	void *tmp = id;
 	switch (id->ver_id) {
 		case 1:
-			show_lnvm_id12_ns(tmp, flags);
+			show_lnvm_id12_ns((void *) id, flags);
 		break;
 		case 2:
-			show_lnvm_id20_ns(tmp, flags);
+			show_lnvm_id20_ns((void *) id, flags);
 		break;
 		default:
 			fprintf(stderr, "Version %d not supported.\n",
@@ -459,8 +458,7 @@ int lnvm_do_id_ns(int fd, int nsid, unsigned int flags)
 			d_raw((unsigned char *)&nvm_id, sizeof(nvm_id));
 		else
 			show_lnvm_id_ns(&nvm_id, flags);
-	}
-	else if (err > 0)
+	} else if (err > 0)
 		fprintf(stderr, "NVMe Status:%s(%x) NSID:%d\n",
 			nvme_status_to_string(err), err, nsid);
 	return err;
@@ -495,7 +493,7 @@ static int __lnvm_do_get_bbtbl(int fd, struct nvme_nvm_id12 *id,
 		.opcode		= nvme_nvm_admin_get_bb_tbl,
 		.nsid		= cpu_to_le32(1),
 		.addr		= (__u64)(uintptr_t)bbtbl,
-		.data_len	= cpu_to_le32(bufsz),
+		.data_len	= bufsz,
 		.ppa		= cpu_to_le64(ppa.ppa),
 	};
 	void *tmp = &cmd;
