@@ -13,18 +13,22 @@ SYNOPSIS
 		[--traddr=<traddr>        | -a <traddr>]
 		[--trsvcid=<trsvcid>      | -s <trsvcid>]
 		[--host-traddr=<traddr>   | -w <traddr>]
+		[--host-iface=<iface>     | -f <iface>]
 		[--hostnqn=<hostnqn>      | -q <hostnqn>]
 		[--hostid=<hostid>        | -I <hostid>]
 		[--raw=<filename>         | -r <filename>]
 		[--keep-alive-tmo=<#>     | -k <#>]
 		[--reconnect-delay=<#>    | -c <#>]
 		[--ctrl-loss-tmo=<#>	  | -l <#>]
-		[--hdr_digest             | -g]
-		[--data_digest            | -G]
+		[--hdr-digest             | -g]
+		[--data-digest            | -G]
 		[--nr-io-queues=<#>       | -i <#>]
 		[--nr-write-queues=<#>    | -W <#>]
 		[--nr-poll-queues=<#>     | -P <#>]
 		[--queue-size=<#>         | -Q <#>]
+		[--matching               | -m]
+		[--persistent             | -p]
+		[--quiet                  | -S]
 
 DESCRIPTION
 -----------
@@ -55,6 +59,7 @@ OPTIONS
 |Value|Definition
 |rdma|The network fabric is an rdma network (RoCE, iWARP, Infiniband, basic rdma, etc)
 |fc  |*WIP* The network fabric is a Fibre Channel network.
+|tcp |The network fabric is a TCP/IP network.
 |loop|Connect to a NVMe over Fabrics target on the local host
 |=================
 
@@ -73,7 +78,14 @@ OPTIONS
 -w <traddr>::
 --host-traddr=<traddr>::
 	This field specifies the network address used on the host to connect
-	to the Discovery Controller.
+	to the Controller. For TCP, this sets the source address on the socket.
+
+-f <iface>::
+--host-iface=<iface>::
+	This field specifies the network interface used on the host to connect
+	to the Controller (e.g. IP eth1, enp2s0, enx78e7d1ea46da). This forces
+	the connection to be made on a specific interface instead of letting
+	the system decide.
 
 -q <hostnqn>::
 --hostnqn=<hostnqn>::
@@ -98,7 +110,9 @@ OPTIONS
 
 -k <#>::
 --keep-alive-tmo=<#>::
-	Overrides the default keep alive timeout (in seconds).
+	Overrides the default keep alive timeout (in seconds). This
+	option will be ignored for discovery, but will be passed on to
+	the subsequent connect call.
 
 -c <#>::
 --reconnect-delay=<#>::
@@ -110,16 +124,18 @@ OPTIONS
 	Overrides the default controller loss timeout period (in seconds).
 
 -g::
---hdr_digest::
+--hdr-digest::
 	Generates/verifies header digest (TCP).
 
 -G::
---data_digest::
+--data-digest::
 	Generates/verifies data digest (TCP).
 
 -i <#>::
 --nr-io-queues=<#>::
 	Overrides the default number of I/O queues create by the driver.
+	This option will be ignored for discovery, but will be passed on
+	to the subsequent connect call.
 
 -W <#>::
 --nr-write-queues=<#>::
@@ -132,7 +148,24 @@ OPTIONS
 -Q <#>::
 --queue-size=<#>::
 	Overrides the default number of elements in the I/O queues created
-	by the driver.
+	by the driver. This option will be ignored for discovery, but will be
+	passed on to the subsequent connect call.
+
+-m::
+--matching::
+	If a traddr was specified on the command line or in the configuration
+	file, only create controllers for discovery records that match the
+	given traddr, rather than for all entries in the discovery log page.
+
+-p::
+--persistent::
+	Don't remove the discovery controller after retrieving the discovery
+	log page.
+
+-S::
+--quiet::
+	Suppress error messages.
+
 
 EXAMPLES
 --------

@@ -756,13 +756,14 @@ nvme-admin-passthru(1) Manual Page
                 [--cdw13=&lt;cdw13&gt;] [--cdw14=&lt;cdw14&gt;] [--cdw15=&lt;cdw15&gt;]
                 [--data-len=&lt;data-len&gt; | -l &lt;data-len&gt;]
                 [--metadata-len=&lt;len&gt; | -m &lt;len&gt;]
-                [--input-file=&lt;file&gt; | -f &lt;file&gt;]
+                [--input-file=&lt;file&gt; | -i &lt;file&gt;]
                 [--read | -r ] [--write | -w]
                 [--timeout=&lt;to&gt; | -t &lt;to&gt;]
                 [--show-command | -s]
                 [--dry-run | -d]
                 [--raw-binary | -b]
-                [--prefill=&lt;prefill&gt; | -p &lt;prefill&gt;]</pre>
+                [--prefill=&lt;prefill&gt; | -p &lt;prefill&gt;]
+                [--latency | -T]</pre>
 <div class="attribution">
 </div></div>
 </div>
@@ -944,6 +945,17 @@ printed to stdout for another program to parse.</p></div>
         is overwriting a buffer for a data-in command.
 </p>
 </dd>
+<dt class="hdlist1">
+-T
+</dt>
+<dt class="hdlist1">
+--latency
+</dt>
+<dd>
+<p>
+        Print out the latency the IOCTL took (in us).
+</p>
+</dd>
 </dl></div>
 </div>
 </div>
@@ -986,7 +998,7 @@ Or if you want to save that structure to a file:
 <div id="footer">
 <div id="footer-text">
 Last updated
- 2018-11-29 13:30:44 GMT
+ 2021-06-04 10:59:04 IST
 </div>
 </div>
 </body>

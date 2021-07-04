@@ -17,7 +17,8 @@ static inline __u8 nvme_generic_status_to_errno(__u16 status)
 	case NVME_SC_SGL_INVALID_METADATA:
 	case NVME_SC_SGL_INVALID_TYPE:
 	case NVME_SC_SGL_INVALID_OFFSET:
-	case NVME_SC_SGL_INVALID_SUBTYPE:
+	case NVME_SC_CMB_INVALID_USE:
+	case NVME_SC_PRP_INVALID_OFFSET:
 		return EINVAL;
 	case NVME_SC_CMDID_CONFLICT:
 		return EADDRINUSE;
@@ -34,6 +35,7 @@ static inline __u8 nvme_generic_status_to_errno(__u16 status)
 	case NVME_SC_CMD_SEQ_ERROR:
 		return EILSEQ;
 	case NVME_SC_SANITIZE_IN_PROGRESS:
+	case NVME_SC_FORMAT_IN_PROGRESS:
 		return EINPROGRESS;
 	case NVME_SC_NS_WRITE_PROTECTED:
 	case NVME_SC_NS_NOT_READY:
@@ -43,6 +45,8 @@ static inline __u8 nvme_generic_status_to_errno(__u16 status)
 		return EREMOTEIO;
 	case NVME_SC_CAP_EXCEEDED:
 		return ENOSPC;
+	case NVME_SC_OPERATION_DENIED:
+		return EPERM;
 	}
 
 	return EIO;
@@ -65,6 +69,11 @@ static inline __u8 nvme_cmd_specific_status_to_errno(__u16 status)
 	case NVME_SC_CTRL_LIST_INVALID:
 	case NVME_SC_BAD_ATTRIBUTES:
 	case NVME_SC_INVALID_PI:
+	case NVME_SC_INVALID_CTRL_ID:
+	case NVME_SC_INVALID_SECONDARY_CTRL_STATE:
+	case NVME_SC_INVALID_NUM_CTRL_RESOURCE:
+	case NVME_SC_INVALID_RESOURCE_ID:
+	case NVME_SC_ANA_INVALID_GROUP_ID:
 		return EINVAL;
 	case NVME_SC_ABORT_LIMIT:
 	case NVME_SC_ASYNC_LIMIT:
@@ -80,6 +89,7 @@ static inline __u8 nvme_cmd_specific_status_to_errno(__u16 status)
 	case NVME_SC_NS_IS_PRIVATE:
 	case NVME_SC_BP_WRITE_PROHIBITED:
 	case NVME_SC_READ_ONLY:
+	case NVME_SC_PMR_SAN_PROHIBITED:
 		return EPERM;
 	case NVME_SC_OVERLAPPING_RANGE:
 	case NVME_SC_NS_NOT_ATTACHED:
@@ -87,8 +97,9 @@ static inline __u8 nvme_cmd_specific_status_to_errno(__u16 status)
 	case NVME_SC_NS_ALREADY_ATTACHED:
 		return EALREADY;
 	case NVME_SC_THIN_PROV_NOT_SUPP:
-	case NVME_SC_ONCS_NOT_SUPPORTED:
 		return EOPNOTSUPP;
+	case NVME_SC_DEVICE_SELF_TEST_IN_PROGRESS:
+		return EINPROGRESS;
 	}
 
 	return EIO;
@@ -115,6 +126,22 @@ static inline __u8 nvme_fabrics_status_to_errno(__u16 status)
 	return EIO;
 }
 
+static inline __u8 nvme_path_status_to_errno(__u16 status)
+{
+	switch (status) {
+	case NVME_SC_INTERNAL_PATH_ERROR:
+	case NVME_SC_ANA_PERSISTENT_LOSS:
+	case NVME_SC_ANA_INACCESSIBLE:
+	case NVME_SC_ANA_TRANSITION:
+	case NVME_SC_CTRL_PATHING_ERROR:
+	case NVME_SC_HOST_PATHING_ERROR:
+	case NVME_SC_HOST_CMD_ABORT:
+		return EACCES;
+	}
+
+	return EIO;
+}
+
 /*
  * nvme_status_to_errno - It converts given status to errno mapped
  * @status: >= 0 for nvme status field in completion queue entry,
@@ -130,8 +157,11 @@ __u8 nvme_status_to_errno(int status, bool fabrics)
 	if (!status)
 		return 0;
 
-	if (status < 0)
-		return ECOMM;
+	if (status < 0) {
+		if (errno)
+			return errno;
+		return status;
+	}
 
 	/*
 	 * The actual status code is enough with masking 0xff, but we need to
@@ -140,12 +170,17 @@ __u8 nvme_status_to_errno(int status, bool fabrics)
 	status &= 0x7ff;
 
 	sct = nvme_status_type(status);
-	if (sct == NVME_SCT_GENERIC)
+	switch (sct) {
+	case NVME_SCT_GENERIC:
 		return nvme_generic_status_to_errno(status);
-	else if (sct == NVME_SCT_CMD_SPECIFIC && !fabrics)
-		return nvme_cmd_specific_status_to_errno(status);
-	else if (sct == NVME_SCT_CMD_SPECIFIC && fabrics)
+	case NVME_SCT_CMD_SPECIFIC:
+		if (!fabrics) {
+			return nvme_cmd_specific_status_to_errno(status);
+		}
 		return nvme_fabrics_status_to_errno(status);
+	case NVME_SCT_PATH:
+		return nvme_path_status_to_errno(status);
+	}
 
 	/*
 	 * Media, integrity related status, and the others will be mapped to

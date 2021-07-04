@@ -11,7 +11,6 @@
 #include "nvme.h"
 #include "nvme-print.h"
 #include "nvme-ioctl.h"
-#include "json.h"
 #include "plugin.h"
 
 #include "argconfig.h"
@@ -34,12 +33,15 @@ typedef enum {
 	PLL_LOCK_LOSS,			 	
 	NAND_WRITE,
 	HOST_WRITE,
+	SRAM_ERROR_CNT,
 	ADD_SMART_ITEMS,
 }addtional_smart_items;
 
 #pragma pack(push,1)
 struct nvme_shannon_smart_log_item {
-	__u8			_resv[5];
+	__u8			rsv1[3];
+	__u8			norm;
+	__u8			rsv2;
 	union {
 		__u8		item_val[6];
 		struct wear_level {
@@ -52,7 +54,7 @@ struct nvme_shannon_smart_log_item {
 			__u32	count;
 		} thermal_throttle;
 	};
-	__u8			resv;
+	__u8			_resv;
 };
 #pragma pack(pop)
 
@@ -66,36 +68,52 @@ static void show_shannon_smart_log(struct nvme_shannon_smart_log *smart,
 {
 	printf("Additional Smart Log for NVME device:%s namespace-id:%x\n",
 		devname, nsid);
-	printf("key                               value\n");
-	printf("program_fail_count              : %"PRIu64"\n",
+	printf("key                               normalized value\n");
+	printf("program_fail_count              : %3d%%       %"PRIu64"\n",
+		smart->items[PROGRAM_FAIL_CNT].norm,
 		int48_to_long(smart->items[PROGRAM_FAIL_CNT].item_val));
-	printf("erase_fail_count                : %"PRIu64"\n",
+	printf("erase_fail_count                : %3d%%       %"PRIu64"\n",
+		smart->items[ERASE_FAIL_CNT].norm,
 		int48_to_long(smart->items[ERASE_FAIL_CNT].item_val));
-	printf("wear_leveling                   : min: %u, max: %u, avg: %u\n",
+	printf("wear_leveling                   : %3d%%       min: %u, max: %u, avg: %u\n",
+		smart->items[WEARLEVELING_COUNT].norm,
 		le16_to_cpu(smart->items[WEARLEVELING_COUNT].wear_level.min),
 		le16_to_cpu(smart->items[WEARLEVELING_COUNT].wear_level.max),
 		le16_to_cpu(smart->items[WEARLEVELING_COUNT].wear_level.avg));
-	printf("end_to_end_error_detection_count: %"PRIu64"\n",
+	printf("end_to_end_error_detection_count: %3d%%       %"PRIu64"\n",
+		smart->items[E2E_ERR_CNT].norm,
 		int48_to_long(smart->items[E2E_ERR_CNT].item_val));
-	printf("crc_error_count                 : %"PRIu64"\n",
+	printf("crc_error_count                 : %3d%%       %"PRIu64"\n",
+		smart->items[CRC_ERR_CNT].norm,
 		int48_to_long(smart->items[CRC_ERR_CNT].item_val));
-	printf("timed_workload_media_wear       : %.3f%%\n",
+	printf("timed_workload_media_wear       : %3d%%       %.3f%%\n",
+		smart->items[TIME_WORKLOAD_MEDIA_WEAR].norm,
 		((float)int48_to_long(smart->items[TIME_WORKLOAD_MEDIA_WEAR].item_val)) / 1024);
-	printf("timed_workload_host_reads       : %"PRIu64"%%\n",
+	printf("timed_workload_host_reads       : %3d%%       %"PRIu64"%%\n",
+		smart->items[TIME_WORKLOAD_HOST_READS].norm,
 		int48_to_long(smart->items[TIME_WORKLOAD_HOST_READS].item_val));
-	printf("timed_workload_timer            : %"PRIu64" min\n",
+	printf("timed_workload_timer            : %3d%%       %"PRIu64" min\n",
+		smart->items[TIME_WORKLOAD_TIMER].norm,
 		int48_to_long(smart->items[TIME_WORKLOAD_TIMER].item_val));
-	printf("thermal_throttle_status         : CurTTState: %u%%, TTActiveCnt: %u\n",
+	printf("thermal_throttle_status         : %3d%%       CurTTSta: %u%%, TTCnt: %u\n",
+		smart->items[THERMAL_THROTTLE].norm,
 		smart->items[THERMAL_THROTTLE].thermal_throttle.st,
 		smart->items[THERMAL_THROTTLE].thermal_throttle.count);
-	printf("retry_buffer_overflow_count     : %"PRIu64"\n",
+	printf("retry_buffer_overflow_count     : %3d%%       %"PRIu64"\n",
+		smart->items[RETRY_BUFFER_OVERFLOW].norm,
 		int48_to_long(smart->items[RETRY_BUFFER_OVERFLOW].item_val));
-	printf("pll_lock_loss_count             : %"PRIu64"\n",
+	printf("pll_lock_loss_count             : %3d%%       %"PRIu64"\n",
+		smart->items[PLL_LOCK_LOSS].norm,
 		int48_to_long(smart->items[PLL_LOCK_LOSS].item_val));
-	printf("nand_bytes_written              : sectors: %"PRIu64"\n",
+	printf("nand_bytes_written              : %3d%%       sectors: %"PRIu64"\n",
+		smart->items[NAND_WRITE].norm,
 		int48_to_long(smart->items[NAND_WRITE].item_val));
-	printf("host_bytes_written              : sectors: %"PRIu64"\n",
+	printf("host_bytes_written              : %3d%%       sectors: %"PRIu64"\n",
+		smart->items[HOST_WRITE].norm,
 		int48_to_long(smart->items[HOST_WRITE].item_val));
+	printf("sram_error_count		: %3d%%       %"PRIu64"\n",
+		smart->items[RETRY_BUFFER_OVERFLOW].norm,
+		int48_to_long(smart->items[SRAM_ERROR_CNT].item_val));
 }
 
 
@@ -116,16 +134,15 @@ static int get_additional_smart_log(int argc, char **argv, struct command *cmd, 
 		.namespace_id = NVME_NSID_ALL,
 	};
 
-	const struct argconfig_commandline_options command_line_options[] = {
-		{"namespace-id", 'n', "NUM", CFG_POSITIVE, &cfg.namespace_id, required_argument, namespace},
-		{"raw-binary",   'b', "",    CFG_NONE,     &cfg.raw_binary,   no_argument,       raw},
-		{NULL}
+	OPT_ARGS(opts) = {
+		OPT_UINT("namespace-id", 'n', &cfg.namespace_id,  namespace),
+		OPT_FLAG("raw-binary",   'b', &cfg.raw_binary,    raw),
+		OPT_END()
 	};
 
-	fd = parse_and_open(argc, argv, desc, command_line_options, &cfg, sizeof(cfg));
-
+	fd = parse_and_open(argc, argv, desc, opts);
 	err = nvme_get_log(fd, cfg.namespace_id, 0xca, false,
-		   sizeof(smart_log), &smart_log);
+		   NVME_NO_LOG_LSP, sizeof(smart_log), &smart_log);
 	if (!err) {
 		if (!cfg.raw_binary)
 			show_shannon_smart_log(&smart_log, cfg.namespace_id, devicename);
@@ -151,7 +168,7 @@ static int get_additional_feature(int argc, char **argv, struct command *cmd, st
 		"change saveable Features.\n\n"\
 		"Available additional feature id:\n"\
 		"0x02:	Shannon power management\n";
-	const char *raw_binary = "show infos in binary format";
+	const char *raw = "show infos in binary format";
 	const char *namespace_id = "identifier of desired namespace";
 	const char *feature_id = "hexadecimal feature name";
 	const char *sel = "[0-3]: curr./default/saved/supp.";
@@ -164,7 +181,7 @@ static int get_additional_feature(int argc, char **argv, struct command *cmd, st
 
 	struct config {
 		__u32 namespace_id;
-		__u32 feature_id;
+		enum nvme_feat feature_id;
 		__u8  sel;
 		__u32 cdw11;
 		__u32 data_len;
@@ -174,24 +191,24 @@ static int get_additional_feature(int argc, char **argv, struct command *cmd, st
 
 	struct config cfg = {
 		.namespace_id = 1,
-		.feature_id   = 0,
+		.feature_id   = NVME_FEAT_NONE,
 		.sel          = 0,
 		.cdw11        = 0,
 		.data_len     = 0,
 	};
 
-	const struct argconfig_commandline_options command_line_options[] = {
-		{"namespace-id",   'n', "NUM", CFG_POSITIVE, &cfg.namespace_id,   required_argument, namespace_id},
-		{"feature-id",     'f', "NUM", CFG_POSITIVE, &cfg.feature_id,     required_argument, feature_id},
-		{"sel",            's', "NUM", CFG_BYTE,     &cfg.sel,            required_argument, sel},
-		{"data-len",       'l', "NUM", CFG_POSITIVE, &cfg.data_len,       required_argument, data_len},
-		{"raw-binary",     'b', "FLAG", CFG_NONE,     &cfg.raw_binary,     no_argument,       raw_binary},
-		{"cdw11",          'c', "NUM", CFG_POSITIVE, &cfg.cdw11,          required_argument, cdw11},
-		{"human-readable", 'H', "FLAG", CFG_NONE,     &cfg.human_readable, no_argument,       human_readable},
-		{NULL}
+	OPT_ARGS(opts) = {
+		OPT_UINT("namespace-id",  'n', &cfg.namespace_id,   namespace_id),
+		OPT_UINT("feature-id",    'f', &cfg.feature_id,     feature_id),
+		OPT_BYTE("sel",           's', &cfg.sel,            sel),
+		OPT_UINT("data-len",      'l', &cfg.data_len,       data_len),
+		OPT_FLAG("raw-binary",    'b', &cfg.raw_binary,     raw),
+		OPT_UINT("cdw11",         'c', &cfg.cdw11,          cdw11),
+		OPT_FLAG("human-readable",'H', &cfg.human_readable, human_readable),
+		OPT_END()
 	};
 
-	fd = parse_and_open(argc, argv, desc, command_line_options, &cfg, sizeof(cfg));
+	fd = parse_and_open(argc, argv, desc, opts);
 	if (fd < 0)
 		return fd;
 
@@ -214,7 +231,7 @@ static int get_additional_feature(int argc, char **argv, struct command *cmd, st
 		memset(buf, 0, cfg.data_len);
 	}
 
-	err = nvme_get_feature(fd, cfg.namespace_id, cfg.feature_id, cfg.sel, cfg.cdw11,
+	err = nvme_get_feature(fd, cfg.namespace_id, cfg.feature_id, cfg.sel, cfg.cdw11, 0,
 			cfg.data_len, buf, &result);
 	if (!err) {
 		printf("get-feature:0x%02x (%s), %s value: %#08x\n", cfg.feature_id,
@@ -280,17 +297,17 @@ static int set_additional_feature(int argc, char **argv, struct command *cmd, st
 		.save         = 0,
 	};
 
-	const struct argconfig_commandline_options command_line_options[] = {
-		{"namespace-id", 'n', "NUM",  CFG_POSITIVE, &cfg.namespace_id, required_argument, namespace_id},
-		{"feature-id",   'f', "NUM",  CFG_POSITIVE, &cfg.feature_id,   required_argument, feature_id},
-		{"value",        'v', "NUM",  CFG_POSITIVE, &cfg.value,        required_argument, value},
-		{"data-len",     'l', "NUM",  CFG_POSITIVE, &cfg.data_len,     required_argument, data_len},
-		{"data",         'd', "FILE", CFG_STRING,   &cfg.file,         required_argument, data},
-		{"save",         's', "FLAG", CFG_NONE,     &cfg.save,         no_argument, save},
-		{NULL}
+	OPT_ARGS(opts) = {
+		OPT_UINT("namespace-id", 'n', &cfg.namespace_id, namespace_id),
+		OPT_UINT("feature-id",   'f', &cfg.feature_id,   feature_id),
+		OPT_UINT("value",        'v', &cfg.value,        value),
+		OPT_UINT("data-len",     'l', &cfg.data_len,     data_len),
+		OPT_FILE("data",         'd', &cfg.file,         data),
+		OPT_FLAG("save",         's', &cfg.save,         save),
+		OPT_END()
 	};
 
-	fd = parse_and_open(argc, argv, desc, command_line_options, &cfg, sizeof(cfg));
+	fd = parse_and_open(argc, argv, desc, opts);
 	if (fd < 0)
 		return fd;
 
@@ -327,7 +344,7 @@ static int set_additional_feature(int argc, char **argv, struct command *cmd, st
 	}
 
 	err = nvme_set_feature(fd, cfg.namespace_id, cfg.feature_id, cfg.value,
-				0, cfg.save, cfg.data_len, buf, &result);
+				0, cfg.save, 0, cfg.data_len, buf, &result);
 	if (err < 0) {
 		perror("set-feature");
 		goto free;

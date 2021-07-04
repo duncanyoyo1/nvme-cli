@@ -4,9 +4,10 @@
 #if !defined(WDC_NVME) || defined(CMD_HEADER_MULTI_READ)
 #define WDC_NVME
 
+#define WDC_PLUGIN_VERSION   "1.14.1"
 #include "cmd.h"
 
-PLUGIN(NAME("wdc", "Western Digital vendor specific extensions"),
+PLUGIN(NAME("wdc", "Western Digital vendor specific extensions", WDC_PLUGIN_VERSION),
 	COMMAND_LIST(
 		ENTRY("cap-diag", "WDC Capture-Diagnostics", wdc_cap_diag)
 		ENTRY("drive-log", "WDC Drive Log", wdc_drive_log)
@@ -23,6 +24,18 @@ PLUGIN(NAME("wdc", "Western Digital vendor specific extensions"),
 		ENTRY("get-drive-status", "WDC Get Drive Status", wdc_drive_status)
 		ENTRY("clear-assert-dump", "WDC Clear Assert Dump", wdc_clear_assert_dump)
 		ENTRY("drive-resize", "WDC Drive Resize", wdc_drive_resize)
+		ENTRY("vs-fw-activate-history", "WDC Get FW Activate History", wdc_vs_fw_activate_history)
+		ENTRY("clear-fw-activate-history", "WDC Clear FW Activate History", wdc_clear_fw_activate_history)
+		ENTRY("enc-get-log", "WDC Get Enclosure Log", wdc_enc_get_log)
+		ENTRY("vs-telemetry-controller-option", "WDC Enable/Disable Controller Initiated Telemetry Log", wdc_vs_telemetry_controller_option)
+		ENTRY("vs-error-reason-identifier", "WDC Telemetry Reason Identifier", wdc_reason_identifier)
+		ENTRY("log-page-directory", "WDC Get Log Page Directory", wdc_log_page_directory)
+		ENTRY("namespace-resize", "WDC NamespaceDrive Resize", wdc_namespace_resize)
+		ENTRY("vs-drive-info", "WDC Get Drive Info", wdc_vs_drive_info)
+		ENTRY("vs-temperature-stats", "WDC Get Temperature Stats", wdc_vs_temperature_stats)
+		ENTRY("capabilities", "WDC Device Capabilities", wdc_capabilities)
+		ENTRY("cloud-SSD-plugin-version", "WDC Cloud SSD Plugin Version", wdc_cloud_ssd_plugin_version)
+		ENTRY("vs-pcie-stats", "WDC VS PCIE Statistics", wdc_vs_pcie_stats)
 	)
 );
 

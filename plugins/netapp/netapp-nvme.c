@@ -25,7 +25,6 @@
 
 #include "nvme.h"
 #include "nvme-ioctl.h"
-#include "json.h"
 
 #include "suffix.h"
 
@@ -197,7 +196,7 @@ static void netapp_get_ontap_labels(char *vsname, char *nspath,
 			vol_name, "/", ns_name);
 }
 
-static void netapp_smdevice_json(struct json_array *devices, char *devname,
+static void netapp_smdevice_json(struct json_object *devices, char *devname,
 		char *arrayname, char *volname, int nsid, char *nguid,
 		char *ctrl, char *astate, char *size, long long lba,
 		long long nsze)
@@ -219,7 +218,7 @@ static void netapp_smdevice_json(struct json_array *devices, char *devname,
 	json_array_add_value_object(devices, device_attrs);
 }
 
-static void netapp_ontapdevice_json(struct json_array *devices, char *devname,
+static void netapp_ontapdevice_json(struct json_object *devices, char *devname,
 		char *vsname, char *nspath, int nsid, char *uuid,
 		char *size, long long lba, long long nsze)
 {
@@ -241,7 +240,7 @@ static void netapp_ontapdevice_json(struct json_array *devices, char *devname,
 static void netapp_smdevices_print(struct smdevice_info *devices, int count, int format)
 {
 	struct json_object *root = NULL;
-	struct json_array *json_devices = NULL;
+	struct json_object *json_devices = NULL;
 	int i, slta;
 	char array_label[ARRAY_LABEL_LEN / 2 + 1];
 	char volume_label[VOLUME_LABEL_LEN / 2 + 1];
@@ -249,7 +248,7 @@ static void netapp_smdevices_print(struct smdevice_info *devices, int count, int
 	char basestr[] = "%s, Array Name %s, Volume Name %s, NSID %d, "
 			"Volume ID %s, Controller %c, Access State %s, %s\n";
 	char columnstr[] = "%-16s %-30s %-30s %4d %32s  %c   %-12s %9s\n";
-	char *formatstr = basestr; // default to "normal" output format
+	char *formatstr = basestr; /* default to "normal" output format */
 
 	if (format == NCOLUMN) {
 		/* for column output, change output string and print column headers */
@@ -266,7 +265,7 @@ static void netapp_smdevices_print(struct smdevice_info *devices, int count, int
 	else if (format == NJSON) {
 		/* prepare for json output */
 		root = json_create_object();
-		json_devices = json_create_array();
+		json_devices = json_create_object();
 	}
 
 	for (i = 0; i < count; i++) {
@@ -304,7 +303,7 @@ static void netapp_ontapdevices_print(struct ontapdevice_info *devices,
 		int count, int format)
 {
 	struct json_object *root = NULL;
-	struct json_array *json_devices = NULL;
+	struct json_object *json_devices = NULL;
 	char vsname[ONTAP_LABEL_LEN] = " ";
 	char nspath[ONTAP_NS_PATHLEN] = " ";
 	long long lba;
@@ -332,7 +331,7 @@ static void netapp_ontapdevices_print(struct ontapdevice_info *devices,
 	} else if (format == NJSON) {
 		/* prepare for json output */
 		root = json_create_object();
-		json_devices = json_create_array();
+		json_devices = json_create_object();
 	}
 
 	for (i = 0; i < count; i++) {
@@ -379,7 +378,7 @@ static int nvme_get_ontap_c2_log(int fd, __u32 nsid, void *buf, __u32 buflen)
 	get_log.cdw10 |= ONTAP_C2_LOG_NSINFO_LSP << 8;
 	get_log.cdw11 = numdu;
 
-	err = nvme_submit_passthru(fd, NVME_IOCTL_ADMIN_CMD, &get_log);
+	err = nvme_submit_admin_passthru(fd, &get_log);
 	if (err) {
 		fprintf(stderr, "ioctl error %0x\n", err);
 		return 1;
@@ -401,7 +400,7 @@ static int netapp_smdevices_get_info(int fd, struct smdevice_info *item,
 	}
 
 	if (strncmp("NetApp E-Series", item->ctrl.mn, 15) != 0)
-		return 0; // not the right model of controller
+		return 0; /* not the right model of controller */
 
 	item->nsid = nvme_get_nsid(fd);
 	err = nvme_identify_ns(fd, item->nsid, 0, &item->ns);
@@ -472,8 +471,6 @@ static int netapp_nvme_filter(const struct dirent *d)
 		snprintf(path, sizeof(path), "%s%s", dev_path, d->d_name);
 		if (stat(path, &bd))
 			return 0;
-		if (!S_ISBLK(bd.st_mode))
-			return 0;
 		if (sscanf(d->d_name, "nvme%dn%d", &ctrl, &ns) != 2)
 			return 0;
 		if (sscanf(d->d_name, "nvme%dn%dp%d", &ctrl, &ns, &partition) == 3)
@@ -501,25 +498,27 @@ static int netapp_smdevices(int argc, char **argv, struct command *command,
 		struct plugin *plugin)
 {
 	const char *desc = "Display information about E-Series volumes.";
-	struct config {
-		char *output_format;
-	};
-	struct config cfg = {
-		.output_format = "normal",
-	};
+
 	struct dirent **devices;
 	int num, i, fd, ret, fmt;
 	struct smdevice_info *smdevices;
 	char path[264];
 	int num_smdevices = 0;
 
-	const struct argconfig_commandline_options opts[] = {
-		{"output-format", 'o', "FMT", CFG_STRING, &cfg.output_format,
-			required_argument, "Output Format: normal|json|column"},
-		{NULL}
+	struct config {
+		char *output_format;
 	};
 
-	ret = argconfig_parse(argc, argv, desc, opts, &cfg, sizeof(cfg));
+	struct config cfg = {
+		.output_format = "normal",
+	};
+
+	OPT_ARGS(opts) = {
+		OPT_FMT("output-format", 'o', &cfg.output_format, "Output Format: normal|json|column"),
+		OPT_END()
+	};
+
+	ret = argconfig_parse(argc, argv, desc, opts);
 	if (ret < 0)
 		return ret;
 
@@ -571,25 +570,26 @@ static int netapp_ontapdevices(int argc, char **argv, struct command *command,
 		struct plugin *plugin)
 {
 	const char *desc = "Display information about ONTAP devices.";
-	struct config {
-		char *output_format;
-	};
-	struct config cfg = {
-		.output_format = "normal",
-	};
 	struct dirent **devices;
 	int num, i, fd, ret, fmt;
 	struct ontapdevice_info *ontapdevices;
 	char path[264];
 	int num_ontapdevices = 0;
 
-	const struct argconfig_commandline_options opts[] = {
-		{"output-format", 'o', "FMT", CFG_STRING, &cfg.output_format,
-			required_argument, "Output Format: normal|json|column"},
-		{NULL}
+	struct config {
+		char *output_format;
 	};
 
-	ret = argconfig_parse(argc, argv, desc, opts, &cfg, sizeof(cfg));
+	struct config cfg = {
+		.output_format = "normal",
+	};
+
+	OPT_ARGS(opts) = {
+		OPT_FMT("output-format", 'o', &cfg.output_format, "Output Format: normal|json|column"),
+		OPT_END()
+	};
+
+	ret = argconfig_parse(argc, argv, desc, opts);
 	if (ret < 0)
 		return ret;
 
